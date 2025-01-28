@@ -4,7 +4,7 @@ import csv
 import argparse
 from multiprocessing import cpu_count
 
-def map_reads(target_folder, query_folder, threads, software, output_dir):
+def map_reads(target_folder, query_folder, threads, software, output_dir, min_identity, max_size_diff):
     os.makedirs(output_dir, exist_ok=True)
 
     if software not in ["minimap2", "pblat"]:
@@ -50,7 +50,34 @@ def map_reads(target_folder, query_folder, threads, software, output_dir):
                     print(f"Error running {software} on {query_file} vs {target_file}: {e}")
                     continue
 
-                # todo: evaluate output
+                query_to_targets = defaultdict(set)
+                total_mappers = 0
+
+                if software == "minimap2":
+                    pass # todo
+
+                elif software == "pblat":
+                    with open(output_file) as f:
+                        lines = f.readlines()[5:]
+                        for line in lines:
+                            columns = line.split()
+                            
+                            matches = int(columns[0])
+                            mismatches = int(columns[1])
+                            query_size = int(columns[10])
+                            target_size = int(columns[14])
+
+                            identity = matches / (matches + mismatches) * 100
+                            size_diff = abs(query_size - target_size) / max(query_size, target_size) * 100
+
+                            if identity >= min_identity and size_diff <= max_size_diff:
+                                query_name = columns[9]
+                                target_name = columns[13].split(";")[0]
+                                query_to_targets[query_name].add(target_name)
+                
+                unique_mappers = sum(1 for targets in query_to_targets.values() if len(targets) == 1)
+
+                csv_writer.writerow([query_file, target_file, unique_mappers, total_mappers])
 
     return summary_file
 
