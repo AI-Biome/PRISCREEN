@@ -4,6 +4,13 @@ import csv
 import argparse
 from multiprocessing import cpu_count
 
+def extract_species(header):
+    pattern = r">\S+\s+([A-Z][a-z]+\s[a-z]+)"
+    match = re.search(pattern, header)
+    if match:
+        return match.group(1)
+    return None
+
 def map_reads(target_folder, query_folder, threads, software, output_dir, min_identity, max_size_diff):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -72,7 +79,7 @@ def map_reads(target_folder, query_folder, threads, software, output_dir, min_id
 
                             if identity >= min_identity and size_diff <= max_size_diff:
                                 query_name = columns[9]
-                                target_name = columns[13].split(";")[0]
+                                target_name = extract_species(columns[13])
                                 query_to_targets[query_name].add(target_name)
                 
                 unique_mappers = sum(1 for targets in query_to_targets.values() if len(targets) == 1)
