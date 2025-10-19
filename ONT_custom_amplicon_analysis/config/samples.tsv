@@ -1,0 +1,3 @@
+sample	fastq
+S1	data/S1.fastq.gz
+S2	data/S2.fastq.gz

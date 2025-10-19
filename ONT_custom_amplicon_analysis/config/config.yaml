@@ -1,0 +1,26 @@
+multi_species:
+  panel_fasta: "data/reference_amplicons.fasta"
+
+nanofilt:
+  enable: false          
+  min_len: 200
+  max_len: 0
+  min_q: 9
+
+cluster:
+  enable: true
+  id_threshold: 0.995
+
+consensus:
+  racon_rounds: 2
+  medaka_model: "r1041_e82_400bps_hac_v4.2.0"
+
+identify:
+  min_pident: 0.985
+  min_qcov: 0.90
+  top_delta: 0.01
+
+threads:
+  map: 8
+  polish: 8
+  mmseqs: 8
