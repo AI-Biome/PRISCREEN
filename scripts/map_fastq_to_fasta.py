@@ -3,6 +3,7 @@ import subprocess
 import csv
 import argparse
 from multiprocessing import cpu_count
+import re
 
 def extract_species(header):
     pattern = r">\S+\s+([A-Z][a-z]+\s[a-z]+)"
