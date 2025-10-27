@@ -40,7 +40,7 @@ def map_reads(target_folder, query_folder, threads, software, output_dir, min_id
                     cmd = [
                         "minimap2",
                         "-ax", "map-ont",
-                        f"--threads={threads}",
+                        "-t", str(threads),
                         target_path,
                         query_path
                     ]
