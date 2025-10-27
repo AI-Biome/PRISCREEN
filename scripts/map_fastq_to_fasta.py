@@ -85,6 +85,7 @@ def map_reads(target_folder, query_folder, threads, software, output_dir, min_id
                                 query_to_targets[query_name].add(target_name)
                 
                 unique_mappers = sum(1 for targets in query_to_targets.values() if len(targets) == 1)
+                total_mappers = len(query_to_targets)
 
                 csv_writer.writerow([query_file, target_file, unique_mappers, total_mappers])
 
