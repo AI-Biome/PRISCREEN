@@ -6,8 +6,6 @@ from multiprocessing import cpu_count
 import re
 from collections import defaultdict
 
-query_to_targets = defaultdict(set)
-
 def extract_species(header):
     pattern = r">\S+\s+([A-Z][a-z]+\s[a-z]+)"
     match = re.search(pattern, header)
