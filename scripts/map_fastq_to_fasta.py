@@ -97,6 +97,8 @@ def main():
     parser.add_argument("--threads", type=int, default=cpu_count(), help="Number of threads to use (default: all available).")
     parser.add_argument("--software", choices=["minimap2", "pblat"], required=True, help="Software to use for mapping.")
     parser.add_argument("--output_dir", required=True, help="Directory to store output files.")
+    parser.add_argument("--min_identity", type=float, default=95.0, help="Minimum % identity to keep an alignment (pblat only).")
+    parser.add_argument("--max_size_diff", type=float, default=5.0, help="Maximum % length difference between query and target (pblat only).")
 
     args = parser.parse_args()
 
