@@ -107,7 +107,9 @@ def main():
         query_folder=args.query_folder,
         threads=args.threads,
         software=args.software,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        min_identity=args.min_identity,
+        max_size_diff=args.max_size_diff
     )
 
     print(f"Mapping summary written to: {summary_file}")
