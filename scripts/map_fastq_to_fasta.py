@@ -40,6 +40,14 @@ def get_optional_tag(tags, key):
     return None
 
 
+def is_unmapped(flag):
+    return (flag & 0x4) != 0
+
+
+def is_secondary_or_supp(flag):
+    return (flag & 0x100) != 0 or (flag & 0x800) != 0
+
+
 def map_reads(target_folder, query_folder, threads, software, output_dir, min_identity, max_size_diff):
     os.makedirs(output_dir, exist_ok=True)
 
