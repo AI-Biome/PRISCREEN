@@ -6,12 +6,23 @@ from multiprocessing import cpu_count
 import re
 from collections import defaultdict
 
+
 def extract_species(header):
     pattern = r">\S+\s+([A-Z][a-z]+\s[a-z]+)"
     match = re.search(pattern, header)
     if match:
         return match.group(1)
     return None
+
+
+def parse_cigar(cigar):
+    if cigar == "*" or not cigar:
+        return {op: 0 for op in "MIDNSHP=X"}
+    counts = {op: 0 for op in "MIDNSHP=X"}
+    for length, op in re.findall(r"(\d+)([MIDNSHP=X])", cigar):
+        counts[op] += int(length)
+    return counts
+
 
 def map_reads(target_folder, query_folder, threads, software, output_dir, min_identity, max_size_diff):
     os.makedirs(output_dir, exist_ok=True)
