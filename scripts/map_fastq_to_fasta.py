@@ -24,6 +24,22 @@ def parse_cigar(cigar):
     return counts
 
 
+def get_optional_tag(tags, key):
+    prefix = key + ":"
+    for t in tags:
+        if t.startswith(prefix):
+            parts = t.split(":", 2)
+            if len(parts) == 3:
+                _k, _type, val = parts
+                if _type == "i":
+                    try:
+                        return int(val)
+                    except ValueError:
+                        return None
+                return val
+    return None
+
+
 def map_reads(target_folder, query_folder, threads, software, output_dir, min_identity, max_size_diff):
     os.makedirs(output_dir, exist_ok=True)
 
