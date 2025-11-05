@@ -1,38 +1,45 @@
 import argparse
 import random
+import gzip
+
+
+def open_maybe_gzip(path, mode):
+    """Open plain or gzipped FASTQ depending on extension."""
+    return gzip.open(path, mode) if path.endswith(".gz") else open(path, mode)
 
 
 def subsample_fastq(input_fastq, output_fastq, num_reads, seed=None):
-    """
-    Subsample a given number of reads from a FASTQ file.
+    """Subsample a given number of reads from a FASTQ or FASTQ.GZ file."""
 
-    Args:
-        input_fastq (str): Path to the input FASTQ file.
-        output_fastq (str): Path to save the subsampled FASTQ file.
-        num_reads (int): Number of reads to sample.
-        seed (int, optional): Random seed for reproducibility.
-    """
     if seed is not None:
         random.seed(seed)
 
-    with open(input_fastq, 'r') as f:
-        lines = f.readlines()
+    reads = []
+    with open_maybe_gzip(input_fastq, "rt") as f:
+        while True:
+            r1 = f.readline()
+            if not r1:
+                break  # EOF
+            r2 = f.readline()
+            r3 = f.readline()
+            r4 = f.readline()
+            reads.append([r1, r2, r3, r4])
 
-    reads = [lines[i:i+4] for i in range(0, len(lines), 4)]
     if num_reads > len(reads):
-        raise ValueError("Requested more reads than available in input file.")
+        raise ValueError(f"Requested {num_reads} reads but input contains only {len(reads)} reads.")
 
     sampled_reads = random.sample(reads, num_reads)
 
-    with open(output_fastq, 'w') as f:
+
+    with open_maybe_gzip(output_fastq, "wt") as f:
         for read in sampled_reads:
             f.writelines(read)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Subsample a specified number of reads from a FASTQ file.")
-    parser.add_argument("--input", required=True, help="Input FASTQ file")
-    parser.add_argument("--output", required=True, help="Output FASTQ file")
+    parser = argparse.ArgumentParser(description="Subsample reads from a FASTQ or FASTQ.GZ file.")
+    parser.add_argument("--input", required=True, help="Input FASTQ(.gz) file")
+    parser.add_argument("--output", required=True, help="Output FASTQ(.gz) file")
     parser.add_argument("--num_reads", type=int, required=True, help="Number of reads to sample")
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed")
 
@@ -48,4 +55,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
