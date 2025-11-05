@@ -4,3 +4,4 @@ dependencies:
   - samtools
   - python>=3.10
   - pandas
+  - setuptools
