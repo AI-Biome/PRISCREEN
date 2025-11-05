@@ -177,8 +177,8 @@ This shows the inconsistency - filtering uses `*100` correctly, but ambiguity de
 | Script | Plain FASTQ | Gzipped FASTQ |
 |--------|-------------|---------------|
 | fastq_error_simulation.py | Yes | Yes |
-| fastq_random_sample.py | Yes | No |
-| map_fastq_to_fasta.py | Yes (assumed) | No |
+| fastq_random_sample.py | Yes | Yes |
+| map_fastq_to_fasta.py | Yes (assumed) | Yes |
 
 **Impact**: Users must decompress files before using certain scripts, creating unnecessary workflow steps.
 
