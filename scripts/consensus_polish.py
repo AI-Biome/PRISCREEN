@@ -6,8 +6,14 @@ import subprocess
 import tempfile
 import gzip
 
-def deduplicate_fastq(input_fq, output_fq):
-    """Deduplicate FASTQ reads by sequence ID, keeping first occurrence"""
+def deduplicate_fastq(input_fq, output_fq, amplicon_filter=None):
+    """Deduplicate FASTQ reads by sequence ID, keeping first occurrence
+
+    Args:
+        input_fq: Input FASTQ file (gzipped)
+        output_fq: Output FASTQ file (uncompressed)
+        amplicon_filter: If provided, only keep reads matching this amplicon name
+    """
     seen_ids = set()
     with gzip.open(input_fq, "rt") as infile, open(output_fq, "w") as outfile:
         while True:
@@ -20,6 +26,15 @@ def deduplicate_fastq(input_fq, output_fq):
 
             # Extract read ID (remove @ and everything after first space)
             read_id = header[1:].split()[0].strip()
+
+            # Filter by amplicon if specified
+            if amplicon_filter:
+                # Extract amplicon from read ID (format: sample_amplicon_...)
+                parts = read_id.split("_")
+                if len(parts) >= 2:
+                    read_amplicon = parts[1]  # e.g., "amp1" from "Test1_amp1_A_0001"
+                    if read_amplicon != amplicon_filter:
+                        continue  # Skip reads from other amplicons
 
             if read_id not in seen_ids:
                 seen_ids.add(read_id)
@@ -83,12 +98,15 @@ def main(snakemake):
         exist_ok=True
     )
 
+    # Get amplicon name for filtering
+    amplicon = snakemake.wildcards.amplicon
+
     if snakemake.params.clustered:
-        # Deduplicate reads first
+        # Deduplicate reads first and filter by amplicon
         with tempfile.NamedTemporaryFile(mode="w", suffix=".fastq", delete=False) as tmp_fq:
             tmp_fq_path = tmp_fq.name
 
-        deduplicate_fastq(snakemake.input.fq, tmp_fq_path)
+        deduplicate_fastq(snakemake.input.fq, tmp_fq_path, amplicon_filter=amplicon)
 
         # Run racon polishing on cluster centroids
         run_racon_rounds(
@@ -115,11 +133,11 @@ def main(snakemake):
             with open(tmp_cons_path, "w") as out:
                 out.write(">consensus\n" + s + "\n")
 
-        # Deduplicate reads
+        # Deduplicate reads and filter by amplicon
         with tempfile.NamedTemporaryFile(mode="w", suffix=".fastq", delete=False) as tmp_fq:
             tmp_fq_path = tmp_fq.name
 
-        deduplicate_fastq(snakemake.input.fq, tmp_fq_path)
+        deduplicate_fastq(snakemake.input.fq, tmp_fq_path, amplicon_filter=amplicon)
 
         # Run racon polishing
         run_racon_rounds(
