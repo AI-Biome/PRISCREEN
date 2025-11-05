@@ -16,7 +16,7 @@ rule mmseqs_search:
         set -euo pipefail
         mkdir -p results/identify/{wildcards.sample}/{wildcards.amplicon}
 
-        mmseqs easy-search {input.cons} {input.db} {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --threads {threads} --search-type 3
+        mmseqs easy-search {input.cons} {input.db} {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --threads {threads} --search-type 3 -k 7 --min-ungapped-score 10 --mask 0
         """
 
 rule summarize_hits:
