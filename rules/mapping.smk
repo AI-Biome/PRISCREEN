@@ -6,7 +6,8 @@ rule mmseqs_createdb:
     input:
         PANEL_FASTA
     output:
-        db = directory("results/mmseqs/panelDB")
+        db = directory("results/mmseqs/panelDB"),
+        sentinel = "results/mmseqs/panelDB.done"
     conda:
         "../envs/mmseqs.yaml"
     threads: THREADS_MMSEQS
@@ -15,6 +16,7 @@ rule mmseqs_createdb:
         set -euo pipefail
         mkdir -p results/mmseqs
         mmseqs createdb {input} {output.db}
+        touch {output.sentinel}
         """
 
 rule map_to_panel:
