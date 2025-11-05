@@ -32,14 +32,13 @@ def main(snakemake):
                 raise RuntimeError("FASTQ appears empty or malformed for seed.")
             out.write(">seed\n" + s + "\n")
 
-    # Temporary BAM file for alignments
-    tmp_bam = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/aln.bam"
+    # Temporary SAM file for alignments (racon requires SAM, not BAM)
+    tmp_sam = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/aln.sam"
 
     def map_and_sort(template_fa):
-        """Map reads to template and sort"""
-        cmd = f"minimap2 -t {snakemake.threads} -ax map-ont {template_fa} {snakemake.input.fq} | samtools view -b - | samtools sort -o {tmp_bam}"
+        """Map reads to template"""
+        cmd = f"minimap2 -t {snakemake.threads} -ax map-ont {template_fa} {snakemake.input.fq} > {tmp_sam}"
         subprocess.check_call(cmd, shell=True)
-        subprocess.check_call(f"samtools index {tmp_bam}", shell=True)
 
     # Initial mapping
     map_and_sort(seed_fa)
@@ -51,7 +50,7 @@ def main(snakemake):
 
     for r in range(snakemake.params.rounds):
         racon_out = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/racon{r}.fa"
-        cmd = f"racon -t {snakemake.threads} {tmp_fq} {tmp_bam} {seed_fa} > {racon_out}"
+        cmd = f"racon -t {snakemake.threads} {tmp_fq} {tmp_sam} {seed_fa} > {racon_out}"
         subprocess.check_call(cmd, shell=True)
         seed_fa = racon_out
         map_and_sort(seed_fa)
