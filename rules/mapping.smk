@@ -41,23 +41,19 @@ rule amplicon_readnames:
     input:
         bam = "results/map/{sample}.panel.sorted.bam"
     output:
-        lists = directory("results/bin/{sample}/readlists")
+        names = "results/bin/{sample}/readlists/{amplicon}.names"
     conda:
         "../envs/samtools.yaml"
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {output.lists}
+        mkdir -p results/bin/{wildcards.sample}/readlists
 
         samtools view {input.bam} \
           | awk -F'\t' '{{print $1"\t"$3}}' \
           | awk -F'\t' 'BEGIN{{OFS="\t"}} $2!="*"{{split($2,a,"|"); print $1,a[1]}}' \
-          | sort -u > {output.lists}/qname_amp.tsv
-
-        cut -f2 {output.lists}/qname_amp.tsv | sort -u > {output.lists}/amps.txt
-        while read AMP; do
-          awk -v A="$AMP" '$2==A{print $1}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
-        done < {output.lists}/amps.txt
+          | awk -v A="{wildcards.amplicon}" '$2==A{{print $1}}' \
+          | sort -u > {output.names}
         """
 
 rule amplicon_fastq:
