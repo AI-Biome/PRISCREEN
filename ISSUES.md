@@ -2,11 +2,11 @@
 
 This document details known bugs, incomplete implementations, and design inconsistencies in the DataProcessing repository.
 
-Last updated: 2025-10-22
+Last updated: 2025-11-05
 
 ## Critical Issues
 
-### Issue 1: map_fastq_to_fasta.py is Non-Functional
+### FIXED Issue 1: map_fastq_to_fasta.py is Non-Functional
 
 **File**: scripts/map_fastq_to_fasta.py
 
@@ -14,7 +14,7 @@ Last updated: 2025-10-22
 
 **Description**: The script contains multiple bugs that prevent it from executing:
 
-#### Missing Import Statements
+#### FIXED Missing Import Statements
 
 **Location**: Lines 8-12
 
@@ -45,7 +45,7 @@ query_to_targets = defaultdict(set)  # ERROR: defaultdict not imported
 
 ---
 
-#### Incomplete Implementation
+#### FIXED Incomplete Implementation
 
 **Location**: Lines 63-64
 
@@ -62,7 +62,7 @@ if software == "minimap2":
 
 ---
 
-#### Logic Error: total_mappers Never Incremented
+#### FIXED Logic Error: total_mappers Never Incremented
 
 **Location**: Lines 61, 87
 
@@ -85,7 +85,7 @@ csv_writer.writerow([query_file, target_file, unique_mappers, total_mappers])
 
 ---
 
-#### Missing Function Arguments
+#### FIXED Missing Function Arguments
 
 **Location**: Lines 14, 99-107
 
@@ -116,7 +116,7 @@ summary_file = map_reads(
 
 ---
 
-### Issue 2: Snakefile Mathematical Bug in Ambiguity Detection
+### FIXED Issue 2: Snakefile Mathematical Bug in Ambiguity Detection
 
 **File**: Snakefile (root directory)
 
@@ -163,7 +163,7 @@ This shows the inconsistency - filtering uses `*100` correctly, but ambiguity de
 
 ## Design Inconsistencies
 
-### Issue 3: Inconsistent File Format Support
+### FIXED Issue 3: Inconsistent File Format Support
 
 **Files Affected**:
 - scripts/fastq_error_simulation.py
@@ -191,7 +191,7 @@ def open_maybe_gzip(path: str, mode: str = "rt"):
 
 ---
 
-### Issue 4: Memory Inefficiency in fastq_random_sample.py
+### FIXED Issue 4: Memory Inefficiency in fastq_random_sample.py
 
 **File**: scripts/fastq_random_sample.py
 
@@ -225,7 +225,7 @@ with open(input_fastq, 'r') as f:
 
 ## Minor Issues
 
-### Issue 5: File Extension Limitations in map_fastq_to_fasta.py
+### FIXED Issue 5: File Extension Limitations in map_fastq_to_fasta.py
 
 **File**: scripts/map_fastq_to_fasta.py
 
@@ -346,16 +346,16 @@ The configuration exists for future use but is not currently implemented in the 
 
 ## Priority Summary
 
-**Immediate action required (Critical)**:
+**DONE Immediate action required (Critical)**:
 1. Fix scripts/map_fastq_to_fasta.py imports and implementation
 2. Fix Snakefile line 246 ambiguity detection logic
 
-**Should fix soon (High priority)**:
+**DONE Should fix soon (High priority)**:
 3. Standardize gzip support across scripts
 4. Optimize scripts/fastq_random_sample.py memory usage
 
 **Nice to have (Medium priority)**:
-5. Improve file extension handling
+5. DONE Improve file extension handling
 6. Add input validation
 7. Create troubleshooting documentation
 
