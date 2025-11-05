@@ -6,8 +6,76 @@ import subprocess
 import tempfile
 import gzip
 
+def deduplicate_fastq(input_fq, output_fq):
+    """Deduplicate FASTQ reads by sequence ID, keeping first occurrence"""
+    seen_ids = set()
+    with gzip.open(input_fq, "rt") as infile, open(output_fq, "w") as outfile:
+        while True:
+            header = infile.readline()
+            if not header:
+                break
+            seq = infile.readline()
+            plus = infile.readline()
+            qual = infile.readline()
+
+            # Extract read ID (remove @ and everything after first space)
+            read_id = header[1:].split()[0].strip()
+
+            if read_id not in seen_ids:
+                seen_ids.add(read_id)
+                outfile.write(header)
+                outfile.write(seq)
+                outfile.write(plus)
+                outfile.write(qual)
+
+def run_racon_rounds(fastq_path, initial_consensus, output_path, rounds, threads):
+    """Run multiple rounds of racon polishing"""
+    current_consensus = initial_consensus
+
+    for i in range(rounds):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".fasta", delete=False) as tmp_cons:
+            tmp_cons_path = tmp_cons.name
+            if i == 0:
+                # First round: use initial consensus
+                subprocess.check_call(f"cp {current_consensus} {tmp_cons_path}", shell=True)
+            else:
+                # Subsequent rounds: use previous output
+                with open(tmp_cons_path, "w") as f:
+                    with open(current_consensus) as src:
+                        f.write(src.read())
+
+        # Align reads to consensus
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sam", delete=False) as tmp_sam:
+            tmp_sam_path = tmp_sam.name
+
+        subprocess.check_call(
+            f"minimap2 -ax map-ont -t {threads} {tmp_cons_path} {fastq_path} > {tmp_sam_path}",
+            shell=True
+        )
+
+        # Run racon
+        if i == rounds - 1:
+            # Final round: write to output
+            subprocess.check_call(
+                f"racon -t {threads} {fastq_path} {tmp_sam_path} {tmp_cons_path} > {output_path}",
+                shell=True
+            )
+        else:
+            # Intermediate round: write to temp file
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".fasta", delete=False) as tmp_out:
+                tmp_out_path = tmp_out.name
+            subprocess.check_call(
+                f"racon -t {threads} {fastq_path} {tmp_sam_path} {tmp_cons_path} > {tmp_out_path}",
+                shell=True
+            )
+            current_consensus = tmp_out_path
+
+        # Cleanup
+        os.unlink(tmp_cons_path)
+        os.unlink(tmp_sam_path)
+
 def main(snakemake):
-    """Generate consensus sequences with racon and medaka polishing"""
+    """Generate consensus sequences with racon polishing"""
 
     # Create output directory
     os.makedirs(
@@ -15,49 +83,56 @@ def main(snakemake):
         exist_ok=True
     )
 
-    # Prepare seed sequence
-    seed_fa = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/seed.fa"
-
     if snakemake.params.clustered:
-        # Use cluster centroids as seed
-        subprocess.check_call(f"cp {snakemake.input.cents} {seed_fa}", shell=True)
+        # Deduplicate reads first
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".fastq", delete=False) as tmp_fq:
+            tmp_fq_path = tmp_fq.name
+
+        deduplicate_fastq(snakemake.input.fq, tmp_fq_path)
+
+        # Run racon polishing on cluster centroids
+        run_racon_rounds(
+            tmp_fq_path,
+            snakemake.input.cents,
+            snakemake.output.cons,
+            snakemake.params.rounds,
+            snakemake.threads
+        )
+
+        # Cleanup
+        os.unlink(tmp_fq_path)
     else:
-        # Use first read as seed
-        with gzip.open(snakemake.input.fq, "rt") as fh, open(seed_fa, "w") as out:
+        # Use first read as initial consensus, then polish with racon
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".fasta", delete=False) as tmp_cons:
+            tmp_cons_path = tmp_cons.name
+
+        with gzip.open(snakemake.input.fq, "rt") as fh:
             h = fh.readline().strip()
             s = fh.readline().strip()
-            fh.readline()
-            fh.readline()
             if not h.startswith("@"):
-                raise RuntimeError("FASTQ appears empty or malformed for seed.")
-            out.write(">seed\n" + s + "\n")
+                raise RuntimeError("FASTQ appears empty or malformed.")
 
-    # Temporary SAM file for alignments (racon requires SAM, not BAM)
-    tmp_sam = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/aln.sam"
+            with open(tmp_cons_path, "w") as out:
+                out.write(">consensus\n" + s + "\n")
 
-    def map_and_sort(template_fa):
-        """Map reads to template"""
-        cmd = f"minimap2 -t {snakemake.threads} -ax map-ont {template_fa} {snakemake.input.fq} > {tmp_sam}"
-        subprocess.check_call(cmd, shell=True)
+        # Deduplicate reads
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".fastq", delete=False) as tmp_fq:
+            tmp_fq_path = tmp_fq.name
 
-    # Initial mapping
-    map_and_sort(seed_fa)
+        deduplicate_fastq(snakemake.input.fq, tmp_fq_path)
 
-    # Racon polishing rounds
-    # Extract FASTQ to temporary file (racon doesn't like process substitution)
-    tmp_fq = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/reads.fq"
-    subprocess.check_call(f"zcat {snakemake.input.fq} > {tmp_fq}", shell=True)
+        # Run racon polishing
+        run_racon_rounds(
+            tmp_fq_path,
+            tmp_cons_path,
+            snakemake.output.cons,
+            snakemake.params.rounds,
+            snakemake.threads
+        )
 
-    for r in range(snakemake.params.rounds):
-        racon_out = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/racon{r}.fa"
-        cmd = f"racon -t {snakemake.threads} {tmp_fq} {tmp_sam} {seed_fa} > {racon_out}"
-        subprocess.check_call(cmd, shell=True)
-        seed_fa = racon_out
-        map_and_sort(seed_fa)
-
-    # Final consensus (racon-polished only, medaka skipped due to dependency conflicts)
-    # Copy the final racon output as the consensus
-    subprocess.check_call(f"cp {seed_fa} {snakemake.output.cons}", shell=True)
+        # Cleanup
+        os.unlink(tmp_cons_path)
+        os.unlink(tmp_fq_path)
 
 if __name__ == "__main__":
     main(snakemake)
