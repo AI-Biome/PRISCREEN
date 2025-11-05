@@ -10,7 +10,8 @@ tests/
 ├── run_tests.sh                       # Test runner script
 ├── test_fastq_random_sample.py        # Tests for fastq_random_sample.py
 ├── test_fastq_error_simulation.py     # Tests for fastq_error_simulation.py
-└── test_map_fastq_to_fasta.py         # Tests for map_fastq_to_fasta.py
+├── test_map_fastq_to_fasta.py         # Tests for map_fastq_to_fasta.py
+└── test_snakemake_workflow.py         # Integration tests for Snakemake workflow
 ```
 
 ## Requirements
@@ -94,6 +95,23 @@ Tests for the read mapping utility:
 
 **18 tests total**
 
+### test_snakemake_workflow.py
+
+Integration tests for the complete Snakemake workflow:
+- ✅ Snakefile syntax validation
+- ✅ Workflow DAG generation
+- ✅ Rule listing and verification
+- ✅ Dry-run of complete workflow
+- ✅ Individual rule testing (mmseqs_createdb, map_to_panel)
+- ✅ Complete workflow execution (single sample)
+- ✅ Output file structure validation
+- ✅ Workflow idempotence (no unnecessary re-runs)
+- ✅ Modular rule file accessibility
+- ✅ Configuration file validation
+- ✅ Samples file validation
+
+**13+ tests total**
+
 ## Test Examples
 
 ### Quick test run
@@ -126,6 +144,27 @@ Some tests require external tools:
 - **minimap2**: Required for `test_map_reads_minimap2()` integration test
   - Test will be skipped if minimap2 is not available
   - To run: ensure minimap2 is in PATH or activate appropriate conda environment
+
+### Running Snakemake Workflow Tests
+
+The Snakemake workflow tests require additional dependencies:
+
+```bash
+# Install snakemake (if not already installed)
+conda install -n base -c conda-forge mamba
+mamba create -c conda-forge -c bioconda -n snakemake snakemake
+
+# Activate environment
+conda activate snakemake
+
+# Run only Snakemake tests
+python -m pytest tests/test_snakemake_workflow.py -v
+
+# Or run directly
+python tests/test_snakemake_workflow.py
+```
+
+**Note**: Snakemake workflow tests can take longer to run as they execute the full pipeline. They use test data from `test_data/` with reduced parameters for faster execution.
 
 ## Continuous Integration
 
@@ -216,11 +255,43 @@ ls -l scripts/fastq_error_simulation.py
 ls -l scripts/map_fastq_to_fasta.py
 ```
 
+## Snakemake Workflow Testing
+
+The workflow tests verify:
+
+1. **Syntax and Structure**
+   - Valid Snakefile syntax
+   - DAG generation
+   - Rule accessibility from included files
+
+2. **Individual Rules**
+   - Database creation (mmseqs_createdb)
+   - Read mapping (map_to_panel)
+   - Each rule can run independently
+
+3. **Complete Workflow**
+   - End-to-end execution for single sample
+   - Output file generation and structure
+   - Workflow idempotence (reruns don't redo work)
+
+4. **Configuration**
+   - Valid YAML config files
+   - Proper samples.tsv format
+   - Referenced files exist
+
+### Test Configuration
+
+Tests use a dedicated config at `test_data/config/config.yaml` with:
+- Reduced thread counts (2 instead of 8)
+- Fewer racon rounds (1 instead of 2)
+- Relaxed thresholds for test data
+- References to test_data paths
+
 ## Future Test Additions
 
 Potential areas for additional tests:
-- Snakemake workflow integration tests
 - Performance benchmarks for large files
 - Edge cases for consensus polishing
 - MMseqs2 search validation
 - Species identification accuracy
+- Multi-sample workflow testing
