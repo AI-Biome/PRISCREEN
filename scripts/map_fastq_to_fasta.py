@@ -8,6 +8,8 @@ from collections import defaultdict
 import gzip
 import tempfile
 import shutil
+import logging
+import sys
 
 
 def open_maybe_gzip(path: str, mode: str = "rt"):
@@ -97,6 +99,11 @@ def map_reads(
 
     summary_file = os.path.join(output_dir, "mapping_summary.csv")
 
+    # Track failed mappings
+    failed_mappings = []
+    successful_mappings = 0
+    total_mappings = 0
+
     with open(summary_file, "w", newline="") as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(["Query_File",
@@ -121,8 +128,10 @@ def map_reads(
 
                 query_input_path = query_path
                 temp_decompressed = None
+                total_mappings += 1
 
                 try:
+                    logging.info(f"Mapping {query_file} to {target_file} using {software}...")
                     if software == "pblat" and query_file.endswith(".gz"):
                         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".fastq", dir=output_dir)
                         tmp.close()
@@ -163,14 +172,56 @@ def map_reads(
                             check=True
                         )
                 except subprocess.CalledProcessError as e:
-                    print(f"Error running {software} on {query_file} vs {target_file}: {e}")
+                    error_msg = f"Error running {software} on {query_file} vs {target_file}"
+                    logging.error(f"{error_msg}: {e}")
+                    if e.stderr:
+                        stderr_text = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)
+                        logging.error(f"stderr: {stderr_text}")
+
+                    failed_mappings.append({
+                        'query': query_file,
+                        'target': target_file,
+                        'error': str(e)
+                    })
                     csv_writer.writerow([query_file, target_file, 0, 0])
-                    
+
                     if temp_decompressed and os.path.exists(temp_decompressed):
                         try:
                             os.remove(temp_decompressed)
-                        except OSError:
-                            pass
+                        except OSError as cleanup_err:
+                            logging.warning(f"Failed to remove temp file {temp_decompressed}: {cleanup_err}")
+                    continue
+                except (IOError, OSError) as e:
+                    error_msg = f"File I/O error for {query_file} vs {target_file}"
+                    logging.error(f"{error_msg}: {e}")
+                    failed_mappings.append({
+                        'query': query_file,
+                        'target': target_file,
+                        'error': str(e)
+                    })
+                    csv_writer.writerow([query_file, target_file, 0, 0])
+
+                    if temp_decompressed and os.path.exists(temp_decompressed):
+                        try:
+                            os.remove(temp_decompressed)
+                        except OSError as cleanup_err:
+                            logging.warning(f"Failed to remove temp file {temp_decompressed}: {cleanup_err}")
+                    continue
+                except Exception as e:
+                    error_msg = f"Unexpected error mapping {query_file} vs {target_file}"
+                    logging.error(f"{error_msg}: {e}", exc_info=True)
+                    failed_mappings.append({
+                        'query': query_file,
+                        'target': target_file,
+                        'error': str(e)
+                    })
+                    csv_writer.writerow([query_file, target_file, 0, 0])
+
+                    if temp_decompressed and os.path.exists(temp_decompressed):
+                        try:
+                            os.remove(temp_decompressed)
+                        except OSError as cleanup_err:
+                            logging.warning(f"Failed to remove temp file {temp_decompressed}: {cleanup_err}")
                     continue
                 finally:
                     
@@ -270,6 +321,28 @@ def map_reads(
                     total_mappers
                 ])
 
+                successful_mappings += 1
+                logging.info(f"Successfully mapped {query_file} to {target_file}: {unique_mappers} unique, {total_mappers} total")
+
+    # Summary report
+    logging.info(f"\n{'='*60}")
+    logging.info(f"MAPPING SUMMARY")
+    logging.info(f"{'='*60}")
+    logging.info(f"Total mapping attempts: {total_mappings}")
+    logging.info(f"Successful: {successful_mappings}")
+    logging.info(f"Failed: {len(failed_mappings)}")
+
+    if failed_mappings:
+        logging.warning(f"\n{'='*60}")
+        logging.warning(f"FAILED MAPPINGS ({len(failed_mappings)} total)")
+        logging.warning(f"{'='*60}")
+        for i, failure in enumerate(failed_mappings, 1):
+            logging.warning(f"{i}. {failure['query']} -> {failure['target']}")
+            logging.warning(f"   Error: {failure['error']}")
+
+    if failed_mappings and successful_mappings == 0:
+        raise RuntimeError(f"All {len(failed_mappings)} mapping attempts failed. Check logs for details.")
+
     return summary_file
 
 
@@ -280,23 +353,67 @@ def main():
     parser.add_argument("--threads", type=int, default=cpu_count(), help="Number of threads to use (default: all available).")
     parser.add_argument("--software", choices=["minimap2", "pblat"], required=True, help="Software to use for mapping.")
     parser.add_argument("--output_dir", required=True, help="Directory to store output files.")
-    parser.add_argument("--min_identity", type=float, default=95.0, help="Minimum % identity to keep an alignment (pblat only).")
-    parser.add_argument("--max_size_diff", type=float, default=5.0, help="Maximum % length difference between query and target (pblat only).")
+    parser.add_argument("--min_identity", type=float, default=95.0, help="Minimum percent identity to keep an alignment (pblat only).")
+    parser.add_argument("--max_size_diff", type=float, default=5.0, help="Maximum percent length difference between query and target (pblat only).")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging (DEBUG level).")
+    parser.add_argument("--log-file", help="Write logs to file instead of stderr.")
 
     args = parser.parse_args()
 
-    summary_file = map_reads(
-        target_folder=args.target_folder,
-        query_folder=args.query_folder,
-        threads=args.threads,
-        software=args.software,
-        output_dir=args.output_dir,
-        min_identity=args.min_identity,
-        max_size_diff=args.max_size_diff
-    )
+    # Configure logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    log_format = '%(asctime)s - %(levelname)s - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
 
-    print(f"Mapping summary written to: {summary_file}")
+    if args.log_file:
+        logging.basicConfig(
+            level=log_level,
+            format=log_format,
+            datefmt=date_format,
+            filename=args.log_file,
+            filemode='w'
+        )
+        # Also log to console
+        console = logging.StreamHandler(sys.stderr)
+        console.setLevel(logging.WARNING)  # Only warnings and errors to console when logging to file
+        console.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+        logging.getLogger('').addHandler(console)
+    else:
+        logging.basicConfig(
+            level=log_level,
+            format=log_format,
+            datefmt=date_format,
+            stream=sys.stderr
+        )
+
+    logging.info(f"Starting mapping with {args.software}")
+    logging.info(f"Query folder: {args.query_folder}")
+    logging.info(f"Target folder: {args.target_folder}")
+    logging.info(f"Output directory: {args.output_dir}")
+    logging.info(f"Threads: {args.threads}")
+
+    try:
+        summary_file = map_reads(
+            target_folder=args.target_folder,
+            query_folder=args.query_folder,
+            threads=args.threads,
+            software=args.software,
+            output_dir=args.output_dir,
+            min_identity=args.min_identity,
+            max_size_diff=args.max_size_diff
+        )
+
+        logging.info(f"Mapping summary written to: {summary_file}")
+        print(f"Mapping summary written to: {summary_file}")
+        return 0
+
+    except RuntimeError as e:
+        logging.error(f"Fatal error: {e}")
+        return 1
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}", exc_info=True)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
