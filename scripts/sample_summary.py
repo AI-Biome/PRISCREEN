@@ -13,8 +13,10 @@ def main(snakemake):
         amp = p.split("/")[-2]
         if os.path.exists(p) and os.path.getsize(p) > 0:
             df = pd.read_csv(p, sep="\t")
-            df.insert(0, "amplicon", amp)
-            rows.append(df)
+            # Only add if dataframe has data rows
+            if not df.empty:
+                df.insert(0, "amplicon", amp)
+                rows.append(df)
 
     if rows:
         all_df = pd.concat(rows, ignore_index=True)
