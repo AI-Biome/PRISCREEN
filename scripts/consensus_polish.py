@@ -45,10 +45,14 @@ def main(snakemake):
     map_and_sort(seed_fa)
 
     # Racon polishing rounds
+    # Extract FASTQ to temporary file (racon doesn't like process substitution)
+    tmp_fq = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/reads.fq"
+    subprocess.check_call(f"zcat {snakemake.input.fq} > {tmp_fq}", shell=True)
+
     for r in range(snakemake.params.rounds):
         racon_out = f"results/consensus/{snakemake.wildcards.sample}/{snakemake.wildcards.amplicon}/racon{r}.fa"
-        cmd = f"racon -t {snakemake.threads} <(zcat {snakemake.input.fq}) {tmp_bam} {seed_fa} > {racon_out}"
-        subprocess.check_call(["bash", "-lc", cmd])
+        cmd = f"racon -t {snakemake.threads} {tmp_fq} {tmp_bam} {seed_fa} > {racon_out}"
+        subprocess.check_call(cmd, shell=True)
         seed_fa = racon_out
         map_and_sort(seed_fa)
 
