@@ -243,7 +243,7 @@ rule summarize_hits:
             status = "OK"
             if len(sub) > 1:
                 p1 = top["pident"]; p2 = sub.iloc[1]["pident"]
-                if p1 > 0 and (p1 - p2)/p1 < params.top_delta*100:
+                if p1 > 0 and (p1 - p2)/p1 < params.top_delta:
                     status = "AMBIGUOUS"
             out_rows.append((q, top["species"], float(top["pident"])/100.0, float(top["qcov"])/100.0, status))
 
