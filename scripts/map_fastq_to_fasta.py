@@ -5,6 +5,38 @@ import argparse
 from multiprocessing import cpu_count
 import re
 from collections import defaultdict
+import gzip
+import tempfile
+import shutil
+
+
+def open_maybe_gzip(path: str, mode: str = "rt"):
+    """Open plain or gzipped file depending on extension."""
+    return gzip.open(path, mode) if path.endswith(".gz") else open(path, mode)
+
+
+def is_fastq_or_gz(fname: str) -> bool:
+    """Accept .fastq, .fastq.gz, .fq, .fq.gz"""
+    return (
+        fname.endswith(".fastq")
+        or fname.endswith(".fastq.gz")
+        or fname.endswith(".fq")
+        or fname.endswith(".fq.gz")
+    )
+
+
+def fastq_stem(fname: str) -> str:
+    """Remove any of .fastq, .fastq.gz, .fq, .fq.gz for clean basenames."""
+    return re.sub(r"\.(?:fastq|fq)(?:\.gz)?$", "", fname)
+
+
+def is_fasta_like(fname: str) -> bool:
+    """Accept .fasta, .fa, .fna for targets."""
+    return (
+        fname.endswith(".fasta")
+        or fname.endswith(".fa")
+        or fname.endswith(".fna")
+    )
 
 
 def extract_species(header):
@@ -73,37 +105,48 @@ def map_reads(
                              "Total_Mappers"])
 
         for target_file in os.listdir(target_folder):
-            if not target_file.endswith(".fasta"):
+            if not is_fasta_like(target_file):
                 continue
             target_path = os.path.join(target_folder, target_file)
 
             for query_file in os.listdir(query_folder):
-                if not query_file.endswith(".fastq"):
+                if not is_fastq_or_gz(query_file):
                     continue
                 query_path = os.path.join(query_folder, query_file)
 
                 output_file = os.path.join(
                     output_dir,
-                    f"{os.path.splitext(query_file)[0]}_to_{os.path.splitext(target_file)[0]}.txt"
+                    f"{fastq_stem(query_file)}_to_{os.path.splitext(target_file)[0]}.txt"
                 )
 
-                if software == "minimap2":
-                    cmd = [
-                        "minimap2",
-                        "-ax", "map-ont",
-                        "-t", str(threads),
-                        target_path,
-                        query_path
-                    ]
-                else:
-                    cmd = [
-                        "pblat",
-                        target_path,
-                        query_path,
-                        output_file
-                    ]
+                query_input_path = query_path
+                temp_decompressed = None
 
                 try:
+                    if software == "pblat" and query_file.endswith(".gz"):
+                        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".fastq", dir=output_dir)
+                        tmp.close()
+                        with open_maybe_gzip(query_path, "rt") as src, open(tmp.name, "w") as dst:
+                            shutil.copyfileobj(src, dst)
+                        query_input_path = tmp.name
+                        temp_decompressed = tmp.name
+
+                    if software == "minimap2":
+                        cmd = [
+                            "minimap2",
+                            "-ax", "map-ont",
+                            "-t", str(threads),
+                            target_path,
+                            query_input_path,
+                        ]
+                    else:  # pblat
+                        cmd = [
+                            "pblat",
+                            target_path,
+                            query_input_path,
+                            output_file
+                        ]
+
                     if software == "minimap2":
                         with open(output_file, "w") as output:
                             subprocess.run(
@@ -122,8 +165,22 @@ def map_reads(
                 except subprocess.CalledProcessError as e:
                     print(f"Error running {software} on {query_file} vs {target_file}: {e}")
                     csv_writer.writerow([query_file, target_file, 0, 0])
+                    
+                    if temp_decompressed and os.path.exists(temp_decompressed):
+                        try:
+                            os.remove(temp_decompressed)
+                        except OSError:
+                            pass
                     continue
+                finally:
+                    
+                    if temp_decompressed and os.path.exists(temp_decompressed):
+                        try:
+                            os.remove(temp_decompressed)
+                        except OSError:
+                            pass
 
+                # Parse results
                 query_to_targets = defaultdict(set)
 
                 if software == "minimap2":
@@ -178,9 +235,9 @@ def map_reads(
 
                             if identity_ok and size_ok:
                                 species = extract_species(rname)
-                                query_to_targets[qname].add(sometimes_alias_species(species) if False else species)
+                                query_to_targets[qname].add(species)
 
-                else:
+                else:  # pblat
                     with open(output_file) as f:
                         lines = f.readlines()[5:]
 
@@ -218,8 +275,8 @@ def map_reads(
 
 def main():
     parser = argparse.ArgumentParser(description="Map query reads to target sequences and evaluate unique mappers.")
-    parser.add_argument("--target_folder", required=True, help="Folder containing target fasta sequences.")
-    parser.add_argument("--query_folder", required=True, help="Folder containing fastq query files.")
+    parser.add_argument("--target_folder", required=True, help="Folder containing target fasta sequences (.fasta/.fa/.fna).")
+    parser.add_argument("--query_folder", required=True, help="Folder containing fastq reads (.fastq/.fastq.gz/.fq/.fq.gz).")
     parser.add_argument("--threads", type=int, default=cpu_count(), help="Number of threads to use (default: all available).")
     parser.add_argument("--software", choices=["minimap2", "pblat"], required=True, help="Software to use for mapping.")
     parser.add_argument("--output_dir", required=True, help="Directory to store output files.")
@@ -240,6 +297,6 @@ def main():
 
     print(f"Mapping summary written to: {summary_file}")
 
+
 if __name__ == "__main__":
     main()
-
