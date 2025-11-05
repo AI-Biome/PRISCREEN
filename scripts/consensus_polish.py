@@ -51,8 +51,15 @@ def run_racon_rounds(fastq_path, initial_consensus, output_path, rounds, threads
         with tempfile.NamedTemporaryFile(mode="w", suffix=".fasta", delete=False) as tmp_cons:
             tmp_cons_path = tmp_cons.name
             if i == 0:
-                # First round: use initial consensus
-                subprocess.check_call(f"cp {current_consensus} {tmp_cons_path}", shell=True)
+                # First round: rename sequences in initial consensus to avoid conflicts with read IDs
+                with open(current_consensus) as src, open(tmp_cons_path, "w") as dst:
+                    seq_num = 0
+                    for line in src:
+                        if line.startswith(">"):
+                            dst.write(f">consensus_{seq_num}\n")
+                            seq_num += 1
+                        else:
+                            dst.write(line)
             else:
                 # Subsequent rounds: use previous output
                 with open(tmp_cons_path, "w") as f:
