@@ -106,7 +106,11 @@ rule amplicon_fastq:
         r"""
         set -euo pipefail
         mkdir -p results/bin/{wildcards.sample}/fastq
-        seqtk subseq {input.fq} {input.names} | gzip -c > {output.fq}
+        if [ -s {input.names} ]; then
+          seqtk subseq {input.fq} {input.names} | gzip -c > {output.fq}
+        else
+          printf "" | gzip -c > {output.fq}
+        fi
         """
 
 rule cluster_vsearch:
