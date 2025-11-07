@@ -48,7 +48,7 @@ rule mmseqs_createdb:
         r"""
         set -euo pipefail
         mkdir -p results/mmseqs
-        mmseqs createdb {input} {output.db}
+        mmseqs createdb {input} {output.db}/panelDB
         """
 
 rule map_to_panel:
