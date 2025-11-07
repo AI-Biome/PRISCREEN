@@ -171,7 +171,9 @@ rule consensus_polish:
         tmp_bam = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/aln.bam"
 
         def map_and_sort(template_fa):
-            cmd = f"minimap2 -t {threads} -ax map-ont {template_fa} {input.fq} | samtools view -b - | samtools sort -o {tmp_bam}"
+            shell(
+                "minimap2 -t {threads} -ax map-ont {template} {input.fq} > {tmp_sam}"
+            )
             subprocess.check_call(cmd, shell=True)
             subprocess.check_call(f"samtools index {tmp_bam}", shell=True)
 
