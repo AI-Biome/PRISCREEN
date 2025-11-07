@@ -172,7 +172,7 @@ rule consensus_polish:
 
         def map_and_sort(template_fa):
             shell(
-                "minimap2 -t {threads} -ax map-ont {template} {input.fq} > {tmp_sam}"
+                "minimap2 -t {threads} -ax map-ont {template_fa} {input.fq} > {tmp_sam}"
             )
 
         map_and_sort(seed_fa)
