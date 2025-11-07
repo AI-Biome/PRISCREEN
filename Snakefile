@@ -179,8 +179,11 @@ rule consensus_polish:
         for r in range(params.rounds):
             racon_out = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/racon{r}.fa"
 
-            cmd = f"racon -t {threads} <(zcat {input.fq}) {tmp_bam} {seed_fa} > {racon_out}"
-            subprocess.check_call(["bash","-lc",cmd])
+            shell.executable("/bin/bash")
+            shell(
+                "racon -t {threads} <(zcat {input.fq}) {tmp_bam} {seed_fa} > {racon_out}"
+            )            
+
             seed_fa = racon_out
             map_and_sort(seed_fa)
 
