@@ -181,7 +181,7 @@ rule consensus_polish:
 
             shell.executable("/bin/bash")
             shell(
-                "racon -t {threads} {input.fq} {tmp_bam} {seed_fa} > {racon_out}"
+                "racon -t {threads} {input.fq} {tmp_sam} {seed_fa} > {racon_out}"
             )            
 
             seed_fa = racon_out
