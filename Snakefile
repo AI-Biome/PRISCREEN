@@ -168,14 +168,12 @@ rule consensus_polish:
                 out.write(">seed\n" + s + "\n")
 
 
-        tmp_bam = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/aln.bam"
+        tmp_sam = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/aln.sam"
 
         def map_and_sort(template_fa):
             shell(
                 "minimap2 -t {threads} -ax map-ont {template} {input.fq} > {tmp_sam}"
             )
-            subprocess.check_call(cmd, shell=True)
-            subprocess.check_call(f"samtools index {tmp_bam}", shell=True)
 
         map_and_sort(seed_fa)
         for r in range(params.rounds):
