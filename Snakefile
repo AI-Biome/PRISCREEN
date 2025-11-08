@@ -141,7 +141,7 @@ rule cluster_vsearch:
         mkdir -p results/cluster/{wildcards.sample}/{wildcards.amplicon}
         zcat {input.fq} \
           | vsearch --cluster_fast - --id {params.id} \
-            --centroids {output.cents} --uc {output.uc} --strand both --qmask none
+            --centroids {output.cents} --uc {output.uc} --strand both --qmask none --relabel centroid_{wildcards.sample}_{wildcards.amplicon}_
         """
 
 rule build_racon:
@@ -227,7 +227,7 @@ rule consensus_polish:
 
         def map_and_sort(template_fa):
             shell(
-                "minimap2 -t {threads} -ax map-ont {template_fa} {input.fq} > {tmp_sam}"
+                "minimap2 -t {threads} -ax map-ont --secondary=no {template_fa} {input.fq} > {tmp_sam}"
             )
 
         map_and_sort(seed_fa)
