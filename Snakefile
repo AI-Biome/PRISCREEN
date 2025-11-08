@@ -269,7 +269,7 @@ rule mmseqs_search:
         set -euo pipefail
         mkdir -p results/identify/{wildcards.sample}/{wildcards.amplicon}
         
-        mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --threads {threads}
+        mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads}
         """
 
 rule summarize_hits:
