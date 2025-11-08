@@ -245,11 +245,15 @@ rule consensus_polish:
             map_and_sort(seed_fa)
 
         medaka_dir = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/medaka"
-        subprocess.check_call(f"rm -rf {medaka_dir}", shell=True)
-        cmd = f"medaka_consensus -i {input.fq} -d {seed_fa} -o {medaka_dir} -t {threads} -m {params.model}"
-        subprocess.check_call(cmd, shell=True)
-
-        subprocess.check_call(f"cp {medaka_dir}/consensus.fasta {output.cons}", shell=True)
+        shell(
+            f"rm -rf {medaka_dir}"
+        )
+        shell(
+            f"medaka_consensus -i {input.fq} -d {seed_fa} -o {medaka_dir} -t {threads} -m {params.model}"
+        )
+        shell(
+            f"cp {medaka_dir}/consensus.fasta {output.cons}"
+        )
 
 rule mmseqs_search:
     input:
