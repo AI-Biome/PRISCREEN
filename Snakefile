@@ -3,6 +3,17 @@ import pandas as pd
 
 configfile: "config/config.yaml"
 
+def has_flag(f):
+    with open("/proc/cpuinfo") as fh:
+        return any(f in line for line in fh)
+
+if has_flag("avx2"):
+    RACON = "software/racon/bin/racon_avx2"
+elif has_flag("sse4_1"):
+    RACON = "software/racon/bin/racon_sse41"
+else:
+    RACON = "software/racon/bin/racon_generic"
+
 SAMPLES_DF = pd.read_csv("config/samples.tsv", sep="\t")
 SAMPLES = SAMPLES_DF["sample"].tolist()
 FASTQ = {r.sample: r.fastq for r in SAMPLES_DF.itertuples()}
@@ -130,6 +141,41 @@ rule cluster_vsearch:
         zcat {input.fq} \
           | vsearch --cluster_fast - --id {params.id} \
             --centroids {output.cents} --uc {output.uc} --strand both --qmask none
+        """
+
+rule build_racon:
+    output:
+        generic = "software/racon/bin/racon_generic",
+        avx2    = "software/racon/bin/racon_avx2"
+    conda:
+        "envs/racon-build.yaml"
+    threads: 4
+    shell:
+        r"""
+        set -euo pipefail
+        rm -rf software/racon_src software/racon_build
+        git clone --recursive https://github.com/lbcb-sci/racon.git software/racon_src
+
+        # Generic (portable)
+        mkdir -p software/racon_build/generic
+        cd software/racon_build/generic
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_CXX_FLAGS="-O3 -march=x86-64 -mtune=generic" \
+              -DCMAKE_C_FLAGS="-O3 -march=x86-64 -mtune=generic" \
+              ../../racon_src
+        make -j {threads}
+        install -D bin/racon ../../../racon/bin/racon_generic
+
+        # AVX2 (fast)
+        cd ..
+        mkdir -p avx2
+        cd avx2
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_CXX_FLAGS="-O3 -mavx2 -mtune=native" \
+              -DCMAKE_C_FLAGS="-O3 -mavx2 -mtune=native" \
+              ../../racon_src
+        make -j {threads}
+        install -D bin/racon ../../../racon/bin/racon_avx2
         """
 
 rule consensus_polish:
