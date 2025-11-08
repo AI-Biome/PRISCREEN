@@ -1,6 +1,9 @@
 import os, re, json, textwrap
 import pandas as pd
 
+from snakemake.shell import shell
+shell.executable("/bin/bash")
+
 configfile: "config/config.yaml"
 
 def has_flag(f):
@@ -234,7 +237,6 @@ rule consensus_polish:
         for r in range(params.rounds):
             racon_out = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/racon{r}.fa"
 
-            shell.executable("/bin/bash")
             shell(
                 f"{input.racon} -t {threads} {input.fq} {tmp_sam} {seed_fa} > {racon_out}"
             )            
