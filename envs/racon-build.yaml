@@ -4,6 +4,6 @@ dependencies:
   - cmake>=3.22
   - git
   - make
-  - gcc
+  - gcc>=4.8
   - gxx
   - zlib
