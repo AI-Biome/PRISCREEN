@@ -10,10 +10,10 @@ def has_flag(f):
     except FileNotFoundError:
         return False
 
-if has_flag("avx2"):
-    RACON_BIN = "software/racon/bin/racon_avx2"
-else:
-    RACON_BIN = "software/racon/bin/racon_generic"
+# if has_flag("avx2"):
+#     RACON_BIN = "software/racon/bin/racon_avx2"
+# else:
+#     RACON_BIN = "software/racon/bin/racon_generic"
 
 SAMPLES_DF = pd.read_csv("config/samples.tsv", sep="\t")
 SAMPLES = SAMPLES_DF["sample"].tolist()
@@ -179,8 +179,16 @@ rule build_racon:
         install -D bin/racon ../../../racon/bin/racon_avx2
         """
 
+def select_racon_output():
+    outs = rules.build_racon.output
+    if has_flag("avx2"):
+        return outs.avx2
+
+    return outs.generic
+
 rule consensus_polish:
     input:
+        racon = select_racon_output(),
         fq = "results/bin/{sample}/fastq/{amplicon}.fq.gz",
         cents = lambda wc: (
             f"results/cluster/{wc.sample}/{wc.amplicon}/centroids.fasta"
@@ -228,12 +236,11 @@ rule consensus_polish:
 
             shell.executable("/bin/bash")
             shell(
-                f"{RACON_BIN} -t {threads} {input.fq} {tmp_sam} {seed_fa} > {racon_out}"
+                f"{input.racon} -t {threads} {input.fq} {tmp_sam} {seed_fa} > {racon_out}"
             )            
 
             seed_fa = racon_out
             map_and_sort(seed_fa)
-
 
         medaka_dir = f"results/consensus/{wildcards.sample}/{wildcards.amplicon}/medaka"
         subprocess.check_call(f"rm -rf {medaka_dir}", shell=True)
