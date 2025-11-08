@@ -4,15 +4,16 @@ import pandas as pd
 configfile: "config/config.yaml"
 
 def has_flag(f):
-    with open("/proc/cpuinfo") as fh:
-        return any(f in line for line in fh)
+    try:
+        with open("/proc/cpuinfo") as fh:
+            return any(f in line for line in fh)
+    except FileNotFoundError:
+        return False
 
 if has_flag("avx2"):
-    RACON = "software/racon/bin/racon_avx2"
-elif has_flag("sse4_1"):
-    RACON = "software/racon/bin/racon_sse41"
+    RACON_BIN = "software/racon/bin/racon_avx2"
 else:
-    RACON = "software/racon/bin/racon_generic"
+    RACON_BIN = "software/racon/bin/racon_generic"
 
 SAMPLES_DF = pd.read_csv("config/samples.tsv", sep="\t")
 SAMPLES = SAMPLES_DF["sample"].tolist()
