@@ -146,8 +146,8 @@ rule cluster_vsearch:
 
 rule build_racon:
     output:
-        generic = "software/racon/bin/racon_generic",
-        avx2    = "software/racon/bin/racon_avx2"
+        generic = "software/racon_build/generic/bin",
+        avx2    = "software/racon_build/avx2/bin"
     conda:
         "envs/racon-build.yaml"
     threads: 4
