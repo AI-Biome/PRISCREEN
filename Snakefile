@@ -90,7 +90,8 @@ rule amplicon_readnames:
     input:
         bam = "results/map/{sample}.panel.sorted.bam"
     output:
-        lists = directory("results/bin/{sample}/readlists")
+        lists = directory("results/bin/{sample}/readlists"),
+        names = expand("results/bin/{{sample}}/readlists/{amp}.names", amp=AMP_LIST)
     conda:
         "envs/samtools.yaml"
     shell:
