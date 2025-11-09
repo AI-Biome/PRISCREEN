@@ -196,7 +196,7 @@ rule consensus_polish:
         cents = lambda wc: (
             f"results/cluster/{wc.sample}/{wc.amplicon}/centroids.fasta"
             if CLUSTER else
-            None
+            []
         )
     output:
         cons = "results/consensus/{sample}/{amplicon}/consensus.fasta"
