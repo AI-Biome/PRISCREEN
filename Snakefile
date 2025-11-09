@@ -105,7 +105,7 @@ rule amplicon_readnames:
 
         cut -f2 {output.lists}/qname_amp.tsv | sort -u > {output.lists}/amps.txt
         while read AMP; do
-          awk -v A="$AMP" '$2==A{print $1}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
+          awk -v A="$AMP" '$2==A{{print $1}}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
         done < {output.lists}/amps.txt
         """
 
