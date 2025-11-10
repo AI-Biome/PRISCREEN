@@ -410,6 +410,16 @@ See ISSUES.md for detailed documentation of known bugs and limitations.
 - Inconsistent file format support across utility scripts
 - Memory inefficiency in scripts/fastq_random_sample.py
 
+### Troubleshooting Conda Environment Issues
+
+If you encounter conda dependency conflicts when creating environments (especially with `medaka`, `samtools`, or `htslib`), try setting channel priority to flexible:
+
+```bash
+conda config --set channel_priority flexible
+```
+
+This allows conda to search across all configured channels to find compatible package versions, rather than strictly prioritizing packages from specific channels. This is particularly important for bioinformatics workflows that mix packages from `bioconda` and `conda-forge`.
+
 ## Citation
 
 If you use this pipeline, please cite the tools it depends on:
