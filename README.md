@@ -144,10 +144,12 @@ snakemake --cores 1 --use-conda --dry-run
 mamba activate snakemake
 
 # Run pipeline using 8 cores
-snakemake --cores 8 --use-conda
+snakemake --cores 8 --use-conda --conda-frontend conda
 ```
 
 Replace 8 with the number of CPU cores available on your machine.
+
+**Note:** The `--conda-frontend conda` flag is recommended if you encounter mamba/conda compatibility issues. It forces Snakemake to use conda instead of mamba for environment creation, which can prevent ImportError issues with numpy/pandas.
 
 #### Run on HPC Cluster (SLURM)
 
@@ -407,6 +409,16 @@ See ISSUES.md for detailed documentation of known bugs and limitations.
 **Design inconsistencies:**
 - Inconsistent file format support across utility scripts
 - Memory inefficiency in scripts/fastq_random_sample.py
+
+### Troubleshooting Conda Environment Issues
+
+If you encounter conda dependency conflicts when creating environments (especially with `medaka`, `samtools`, or `htslib`), try setting channel priority to flexible:
+
+```bash
+conda config --set channel_priority flexible
+```
+
+This allows conda to search across all configured channels to find compatible package versions, rather than strictly prioritizing packages from specific channels. This is particularly important for bioinformatics workflows that mix packages from `bioconda` and `conda-forge`.
 
 ## Citation
 

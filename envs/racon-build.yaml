@@ -1,0 +1,8 @@
+name: racon-build
+channels: [conda-forge, bioconda, defaults]
+dependencies:
+  - cmake=3.25.1
+  - git
+  - make=4.3
+  - gcc=12.2.0
+  - zlib=1.2.13
