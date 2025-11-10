@@ -1,3 +1,3 @@
 sample	fastq
-Test1	data/Test1.fastq.gz
-Test2	data/Test2.fastq.gz
+Test1	test_data/data/Test1.fastq.gz
+Test2	test_data/data/Test2.fastq.gz
