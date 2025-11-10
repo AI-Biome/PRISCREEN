@@ -62,7 +62,7 @@ rule mmseqs_createdb:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p results/mmseqs
+        mkdir -p {output.db}
         mmseqs createdb {input} {output.db}/panelDB
         """
 
@@ -92,6 +92,8 @@ rule amplicon_readnames:
     output:
         lists = directory("results/bin/{sample}/readlists"),
         names = expand("results/bin/{{sample}}/readlists/{amp}.names", amp=AMP_LIST)
+    params:
+        amps = " ".join(AMP_LIST)
     conda:
         "envs/samtools.yaml"
     shell:
@@ -105,6 +107,13 @@ rule amplicon_readnames:
           | sort -u > {output.lists}/qname_amp.tsv
 
         cut -f2 {output.lists}/qname_amp.tsv | sort -u > {output.lists}/amps.txt
+
+        # Create empty .names files for all expected amplicons
+        for AMP in {params.amps}; do
+          touch {output.lists}/"$AMP".names
+        done
+
+        # Fill in the .names files for amplicons that have reads
         while read AMP; do
           awk -v A="$AMP" '$2==A{{print $1}}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
         done < {output.lists}/amps.txt
@@ -224,8 +233,13 @@ rule mmseqs_search:
         r"""
         set -euo pipefail
         mkdir -p results/identify/{wildcards.sample}/{wildcards.amplicon}
-        
-        mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads}
+
+        # Check if consensus file is empty, if so create empty output
+        if [ ! -s {input.cons} ]; then
+            touch {output.hits}
+        else
+            mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads}
+        fi
         """
 
 rule summarize_hits:

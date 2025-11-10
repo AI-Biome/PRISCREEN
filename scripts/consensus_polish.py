@@ -18,8 +18,29 @@ clustered = snakemake.params.clustered
 
 os.makedirs(f"results/consensus/{sample}/{amplicon}", exist_ok=True)
 
+# Check if input FASTQ is empty
+fq_is_empty = False
+try:
+    with gzip.open(fq, "rt") as fh:
+        first_line = fh.readline()
+        if not first_line or not first_line.startswith("@"):
+            fq_is_empty = True
+except:
+    fq_is_empty = True
+
+# If FASTQ is empty, create empty output and exit
+if fq_is_empty:
+    with open(output_cons, "w") as out:
+        pass  # Create empty file
+    exit(0)
+
 seed_fa = f"results/consensus/{sample}/{amplicon}/seed.fa"
 if clustered:
+    # Check if centroids file exists and is not empty
+    if not os.path.exists(cents) or os.path.getsize(cents) == 0:
+        with open(output_cons, "w") as out:
+            pass  # Create empty file
+        exit(0)
     subprocess.check_call(f"cp {cents} {seed_fa}", shell=True)
 else:
     with gzip.open(fq, "rt") as fh, open(seed_fa, "w") as out:
