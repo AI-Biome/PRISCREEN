@@ -144,10 +144,12 @@ snakemake --cores 1 --use-conda --dry-run
 mamba activate snakemake
 
 # Run pipeline using 8 cores
-snakemake --cores 8 --use-conda
+snakemake --cores 8 --use-conda --conda-frontend conda
 ```
 
 Replace 8 with the number of CPU cores available on your machine.
+
+**Note:** The `--conda-frontend conda` flag is recommended if you encounter mamba/conda compatibility issues. It forces Snakemake to use conda instead of mamba for environment creation, which can prevent ImportError issues with numpy/pandas.
 
 #### Run on HPC Cluster (SLURM)
 
