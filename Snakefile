@@ -4,11 +4,16 @@ Main Snakefile for ONT Custom Amplicon Analysis Pipeline
 
 import os, re, json, textwrap
 import pandas as pd
+import configparser
 
 from snakemake.shell import shell
 shell.executable("/bin/bash")
 
 configfile: "config/config.yaml"
+
+# Read SLURM configuration from config.ini
+slurm_config = configparser.ConfigParser()
+slurm_config.read('config.ini')
 
 # ============================================================================
 # Helper Functions

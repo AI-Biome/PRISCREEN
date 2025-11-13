@@ -11,6 +11,9 @@ rule mmseqs_search:
     conda:
         "../envs/mmseqs.yaml"
     threads: THREADS_MMSEQS
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     shell:
         r"""
         set -euo pipefail
@@ -33,6 +36,9 @@ rule summarize_hits:
         tsv = "results/identify/{sample}/{amplicon}/summary.tsv"
     conda:
         "../envs/mmseqs.yaml"
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     params:
         min_pid = IDENT_MIN_PID,
         min_qcov = IDENT_MIN_QCOV,
@@ -47,5 +53,8 @@ rule sample_summary:
         tsv = "results/identify/{sample}/species_summary.tsv"
     conda:
         "../envs/samtools.yaml"
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     script:
         "../scripts/sample_summary.py"

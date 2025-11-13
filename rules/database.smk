@@ -10,6 +10,9 @@ rule mmseqs_createdb:
     conda:
         "../envs/mmseqs.yaml"
     threads: THREADS_MMSEQS
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     shell:
         r"""
         set -euo pipefail

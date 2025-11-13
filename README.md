@@ -11,12 +11,16 @@ Version: 0.1.0
   - [Step 1: Install Required Software](#step-1-install-required-software)
   - [Step 2: Configure Your Analysis](#step-2-configure-your-analysis)
   - [Step 3: Run the Workflow](#step-3-run-the-workflow)
+    - [Run on Local Machine](#run-on-local-machine)
+    - [Run on HPC Cluster (SLURM)](#run-on-hpc-cluster-slurm)
   - [Step 4: Collect Your Results](#step-4-collect-your-results)
 - [Workflow Overview](#workflow-overview)
 - [Utility Scripts](#utility-scripts)
 - [Advanced Configuration](#advanced-configuration)
 - [Output Files](#output-files)
 - [Known Issues](#known-issues)
+  - [Troubleshooting Conda Environment Issues](#troubleshooting-conda-environment-issues)
+  - [SLURM-Specific Troubleshooting](#slurm-specific-troubleshooting)
 - [Citation](#citation)
 
 ## What is this?
@@ -153,23 +157,62 @@ Replace 8 with the number of CPU cores available on your machine.
 
 #### Run on HPC Cluster (SLURM)
 
+The pipeline includes SLURM configuration for running on HPC clusters. Resource allocation (CPUs, memory, runtime) is configured via `config.ini` and automatically applied to all rules.
+
+**Method 1: Using SLURM Profile (Recommended)**
+
 ```bash
 # Activate Snakemake environment
 mamba activate snakemake
 
-# Submit jobs to SLURM
+# Submit jobs to SLURM using the pre-configured profile
+snakemake --profile profiles/slurm
+```
+
+**Method 2: Command-line Options**
+
+```bash
+# Submit jobs to SLURM with explicit options
 snakemake \
   --executor slurm \
-  --jobs 10 \
+  --jobs 20 \
   --use-conda \
-  --default-resources slurm_partition=your_partition
+  --default-resources slurm_partition=batch slurm_account=none
 ```
 
 **Command explanation:**
-- --executor slurm: Use SLURM job scheduler
-- --jobs 10: Run up to 10 jobs simultaneously
-- --use-conda: Use conda environments for tools
-- --default-resources slurm_partition=your_partition: Adjust to match your cluster
+- `--executor slurm`: Use SLURM job scheduler
+- `--jobs 20`: Run up to 20 jobs simultaneously
+- `--use-conda`: Use conda environments for tools
+- `--default-resources`: Set default SLURM partition and account
+
+**Configuring SLURM Resources**
+
+Edit `config.ini` to adjust resource allocation for your cluster:
+
+```ini
+[SLURM_ARGS]
+cpus_per_task = 48          # CPUs per SLURM task
+mem_of_node = 126000        # Total node memory in MB
+max_runtime = 4320          # Max runtime in minutes (72h)
+slurm_partition = batch     # SLURM partition name
+```
+
+**Parameter explanation:**
+- `cpus_per_task`: Number of CPUs to request per job
+- `mem_of_node`: Total memory available on the node in MB (memory per job = mem_of_node / cpus_per_task)
+- `max_runtime`: Maximum runtime in minutes
+- `slurm_partition`: Name of the SLURM partition to use
+
+Edit `profiles/slurm/config.yaml` to adjust cluster-specific settings:
+
+```yaml
+executor: slurm
+jobs: 20                    # Max simultaneous jobs
+default-resources:
+  - slurm_account=none      # Your SLURM account
+  - slurm_partition=batch   # Your partition name
+```
 
 #### Monitor Progress
 
@@ -177,11 +220,17 @@ snakemake \
 # Check SLURM queue (if using cluster)
 squeue -u $USER
 
+# Watch jobs in real-time
+watch -n 5 'squeue -u $USER'
+
 # Check for output files
 ls -lh results/identify/*/species_summary.tsv
 
 # View Snakemake log
 tail -f .snakemake/log/*.log
+
+# View SLURM logs for specific rules
+tail -f .snakemake/slurm_logs/rule_*/slurm-*.out
 ```
 
 ### Step 4: Collect Your Results
@@ -419,6 +468,30 @@ conda config --set channel_priority flexible
 ```
 
 This allows conda to search across all configured channels to find compatible package versions, rather than strictly prioritizing packages from specific channels. This is particularly important for bioinformatics workflows that mix packages from `bioconda` and `conda-forge`.
+
+### SLURM-Specific Troubleshooting
+
+**Jobs failing with memory errors:**
+- Increase `mem_of_node` in `config.ini`
+- Or reduce `cpus_per_task` (allocates more memory per job: mem_of_node / cpus_per_task)
+
+**Jobs timing out:**
+- Increase `max_runtime` in `config.ini`
+- Check partition time limits: `sinfo -o "%P %l"`
+
+**Permission denied on partition:**
+- Check available partitions: `sinfo`
+- Update `slurm_partition` in `profiles/slurm/config.yaml`
+- Verify access: `sacctmgr show user $USER withassoc`
+
+**Too many jobs queued:**
+- Reduce `jobs` value in `profiles/slurm/config.yaml`
+- Check cluster fair-use policies
+
+**Conda environments not building on compute nodes:**
+- Pre-create environments: `snakemake --use-conda --conda-create-envs-only --cores 1`
+- Check internet connectivity on compute nodes
+- Consider using `--conda-frontend conda` instead of mamba
 
 ## Citation
 

@@ -9,6 +9,9 @@ rule build_racon:
     conda:
         "../envs/racon-build.yaml"
     threads: 4
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     shell:
         r"""
         set -euo pipefail
@@ -58,6 +61,9 @@ rule consensus_polish:
     conda:
         "../envs/consensus.yaml"
     threads: THREADS_POLISH
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     params:
         rounds = int(config["consensus"]["racon_rounds"]),
         model  = config["consensus"]["medaka_model"],
