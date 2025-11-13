@@ -1,0 +1,29 @@
+# Temporary directories created by MMseqs2
+tmp_mmseqs_*/
+tmp_*/
+
+# Snakemake working directory
+.snakemake/
+
+# Pipeline results (optional - uncomment if you don't want to track results)
+# results/
+
+# Software binaries and builds
+software/
+racon/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -75,3 +75,13 @@ include: "rules/mapping.smk"
 include: "rules/clustering.smk"
 include: "rules/consensus.smk"
 include: "rules/identification.smk"
+
+# ============================================================================
+# Cleanup Handlers
+# ============================================================================
+
+onsuccess:
+    shell("rm -rf tmp_mmseqs_* 2>/dev/null || true")
+
+onerror:
+    shell("rm -rf tmp_mmseqs_* 2>/dev/null || true")

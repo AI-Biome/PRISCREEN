@@ -21,6 +21,8 @@ rule mmseqs_search:
             touch {output.hits}
         else
             mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads} --format-output "query,target,pident,qcov,bits"
+            # Clean up temporary directory after successful search
+            rm -rf tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon}
         fi
         """
 
