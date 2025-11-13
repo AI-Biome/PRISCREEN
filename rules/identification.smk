@@ -20,7 +20,7 @@ rule mmseqs_search:
         if [ ! -s {input.cons} ]; then
             touch {output.hits}
         else
-            mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads}
+            mmseqs easy-search {input.cons} {input.db}/panelDB {output.hits} tmp_mmseqs_{wildcards.sample}_{wildcards.amplicon} --search-type 3 --threads {threads} --format-output "query,target,pident,qcov,bits"
         fi
         """
 
