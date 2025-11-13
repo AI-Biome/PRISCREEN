@@ -56,7 +56,7 @@ tmp_sam = f"results/consensus/{sample}/{amplicon}/aln.sam"
 
 def map_and_sort(template_fa):
     subprocess.check_call(
-        f"minimap2 -t {threads} -ax map-ont --secondary=no {template_fa} {fq} > {tmp_sam}",
+        f"minimap2 -t {threads} -ax map-ont --secondary=yes {template_fa} {fq} > {tmp_sam}",
         shell=True
     )
 
