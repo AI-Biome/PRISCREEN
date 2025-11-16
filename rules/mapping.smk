@@ -13,7 +13,7 @@ rule map_to_panel:
         "../envs/minimap2.yaml"
     threads: THREADS_MAP
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * THREADS_MAP // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
         runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     shell:
         r"""

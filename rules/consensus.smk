@@ -10,7 +10,7 @@ rule build_racon:
         "../envs/racon-build.yaml"
     threads: 4
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * 4 // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
         runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     shell:
         r"""
@@ -62,7 +62,7 @@ rule consensus_polish:
         "../envs/consensus.yaml"
     threads: THREADS_POLISH
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * THREADS_POLISH // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
         runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     params:
         rounds = int(config["consensus"]["racon_rounds"]),
