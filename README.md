@@ -1,6 +1,6 @@
-# DataProcessing
+# PRISCREEN
 
-Oxford Nanopore Technology (ONT) Custom Amplicon Analysis Pipeline
+Software for evaluating ONT custom amplicon data from PRISTINE (https://github.com/AI-Biome/PRISTINE).
 
 Version: 0.1.0-beta.1
 
@@ -25,7 +25,7 @@ Version: 0.1.0-beta.1
 
 ## What is this?
 
-This repository contains tools for processing Oxford Nanopore Technology (ONT) amplicon sequencing data from mixed samples containing both 16S rRNA and custom amplicons. The main pipeline identifies which species are present in each custom amplicon by:
+This repository contains tools for processing Oxford Nanopore Technology (ONT) amplicon sequencing data from mixed samples containing custom amplicons. The main pipeline identifies which species are present in each custom amplicon by:
 
 1. Mapping ONT reads to a reference panel of amplicons
 2. Binning reads by amplicon type
@@ -272,18 +272,25 @@ This Snakemake pipeline processes ONT amplicon data to identify species in mixed
 ### Pipeline Steps
 
 1. mmseqs_createdb - Build searchable database from reference panel
-2. map_to_panel - Align reads to reference amplicons (minimap2 -ax map-ont)
+2. map_to_panel - Align reads to all reference amplicon variants
+   - Uses minimap2 -ax map-ont for ONT reads
+   - Keeps up to 10 secondary alignments (-N 10) to handle multi-species panels
+   - Allows reads to map to multiple species variants (--secondary=yes)
 3. amplicon_readnames - Extract read names for each amplicon type
 4. amplicon_fastq - Extract FASTQ records for individual amplicons (seqtk)
 5. cluster_vsearch - Cluster reads by similarity (vsearch, default 99.5% identity)
-6. consensus_polish - Generate consensus sequences:
-   - Optional: Use cluster centroids as seeds (if clustering enabled)
-   - Fallback: Use first read as seed (if clustering disabled)
-   - Racon polishing (default: 2 rounds)
-   - Medaka error correction
-7. mmseqs_search - Search consensus sequences against reference database
-8. summarize_hits - Identify best species match with quality filtering
-9. sample_summary - Aggregate results per sample across all amplicons
+   - Always runs, but results can be optionally ignored in consensus step
+6. build_racon - Compile Racon with CPU-specific optimizations (one-time)
+   - Builds generic (x86-64) and AVX2 versions
+   - Automatically selects optimal binary based on CPU features
+7. consensus_polish - Generate consensus sequences:
+   - Select seed: cluster centroids (if clustering enabled) or first read
+   - Iterative Racon polishing with re-mapping between rounds (default: 2 rounds)
+   - Final Medaka error correction
+8. mmseqs_search - Search consensus sequences against reference database
+   - Outputs 5-column custom format: query, target, pident, qcov, bits
+9. summarize_hits - Identify best species match with quality filtering
+10. sample_summary - Aggregate results per sample across all amplicons
 
 **Total runtime**: Varies by sample size and number of amplicons
 - Small samples (< 10K reads): ~30 minutes
@@ -336,22 +343,40 @@ python scripts/fastq_random_sample.py \
 ```
 
 **Parameters:**
-- --input: Input FASTQ file (plain text only, no gzip support)
+- --input: Input FASTQ file (plain or gzipped)
 - --output: Output FASTQ file
 - --num_reads: Number of reads to sample
 - --seed: Random seed for reproducibility (optional)
 
 **Note**: This script loads the entire FASTQ into memory. Not recommended for very large files (> 1GB).
 
-### Read Mapping to Reference (INCOMPLETE)
+### Read Mapping to Reference
 
-**Warning**: This script is incomplete and not functional.
+**Purpose**: Map query reads to target sequences using minimap2 or pblat.
 
-**File**: scripts/map_fastq_to_fasta.py
+**Usage:**
 
-**Intended purpose**: Map query reads to target sequences using minimap2 or pblat.
+```bash
+python scripts/map_fastq_to_fasta.py \
+  --target_folder data/targets \
+  --query_folder data/queries \
+  --software minimap2 \
+  --output_dir results/mapping \
+  --threads 8 \
+  --min_identity 95.0 \
+  --max_size_diff 5.0
+```
 
-**Status**: Contains multiple bugs and incomplete implementations. See ISSUES.md for details.
+**Parameters:**
+- --target_folder: Directory with target sequences (.fasta/.fa/.fna)
+- --query_folder: Directory with query reads (.fastq/.fq, optionally .gz)
+- --software: Mapping tool (minimap2 or pblat)
+- --output_dir: Output directory
+- --threads: CPU threads (default: all available)
+- --min_identity: Minimum % identity threshold (default: 95.0)
+- --max_size_diff: Maximum % length difference (default: 5.0)
+
+**Note**: This script is independent of the main Snakemake workflow and intended for standalone analysis or validation. Previously had bugs (see ISSUES.md), now functional.
 
 ## Advanced Configuration
 
@@ -361,9 +386,11 @@ Edit config/config.yaml to customize the pipeline:
 
 ```yaml
 cluster:
-  enable: true              # Set to false to skip clustering
+  enable: true              # If false, consensus uses first read as seed instead of centroids
   id_threshold: 0.995       # Clustering identity (0.99-1.0 typical)
 ```
+
+**Note:** The cluster_vsearch rule always executes to generate cluster files. Setting `enable: false` only changes the consensus polishing strategy (first read as seed vs. cluster centroids). This has minimal performance impact.
 
 **When to disable clustering:**
 - Very low coverage (< 10 reads per amplicon)
@@ -400,9 +427,11 @@ identify:
 - top_delta: 0.01-0.02 for strict matches, 0.05 for more permissive
 
 **Status determination:**
-- OK: Top hit passes thresholds, second-best hit differs by > top_delta
-- AMBIGUOUS: Multiple hits within top_delta of top hit
-- NO_HIT: No hits pass min_pident and min_qcov
+- OK: Top hit passes thresholds, and (pident₁ - pident₂) / pident₁ > top_delta
+- AMBIGUOUS: Multiple hits where relative difference ≤ top_delta
+  - Formula: (top_pident - second_pident) / top_pident ≤ top_delta
+  - Example: top=99%, second=98.5%, delta=0.01 → (99-98.5)/99=0.00505 < 0.01 → AMBIGUOUS
+- NO_HIT: No hits pass min_pident and min_qcov thresholds
 
 ### Thread Configuration
 
@@ -433,7 +462,14 @@ Detailed results for each amplicon separately.
 
 **File**: results/identify/{sample}/{amplicon}/mmseqs_hits.tsv
 
-Raw similarity search results (13-column format).
+5-column custom format (not standard BLAST format):
+1. query - Consensus sequence ID
+2. target - Reference sequence ID
+3. pident - Percent identity (0-100 scale)
+4. qcov - Query coverage (0-100 scale)
+5. bits - Bit score
+
+Empty file if no consensus sequences were generated for this amplicon.
 
 ### Consensus Sequences
 
@@ -447,17 +483,34 @@ Polished consensus sequences after Racon + Medaka.
 
 Reads binned by amplicon type.
 
+### Handling Empty Amplicons
+
+If no reads map to an amplicon (amplicon not present in the sample):
+1. amplicon_fastq produces empty .fq.gz file
+2. cluster_vsearch may fail or produce empty centroids
+3. consensus_polish creates empty consensus.fasta
+4. mmseqs_search creates empty mmseqs_hits.tsv
+5. summarize_hits creates empty summary.tsv with headers only
+6. Final species_summary.tsv excludes this amplicon
+
+**This is expected behavior** - not all samples contain all amplicons.
+
+To identify which amplicons had reads:
+```bash
+# Count reads per amplicon
+for f in results/bin/SAMPLE/fastq/*.fq.gz; do
+  echo "$f: $(zcat $f | wc -l | awk '{print $1/4}')"
+done
+```
+
 ## Known Issues
 
 See ISSUES.md for detailed documentation of known bugs and limitations.
 
-**Critical issues:**
-- scripts/map_fastq_to_fasta.py is non-functional (missing imports, incomplete logic)
-- Snakefile line 246 has incorrect percentage comparison logic
+**Note:** Most critical bugs in scripts/map_fastq_to_fasta.py have been fixed (see ISSUES.md for details).
 
-**Design inconsistencies:**
-- Inconsistent file format support across utility scripts
-- Memory inefficiency in scripts/fastq_random_sample.py
+**Remaining design considerations:**
+- Memory inefficiency in scripts/fastq_random_sample.py (loads entire file into memory)
 
 ### Troubleshooting Conda Environment Issues
 

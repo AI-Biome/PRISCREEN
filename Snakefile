@@ -10,6 +10,7 @@ from snakemake.shell import shell
 shell.executable("/bin/bash")
 
 # Pipeline version
+__author__ = "Tomas Kudlacek, Katharina J. Hoff"
 __version__ = "0.1.0-beta.1"
 
 configfile: "config/config.yaml"
