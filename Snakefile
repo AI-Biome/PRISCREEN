@@ -9,6 +9,9 @@ import configparser
 from snakemake.shell import shell
 shell.executable("/bin/bash")
 
+# Pipeline version
+__version__ = "0.1.0-beta.1"
+
 configfile: "config/config.yaml"
 
 # Read SLURM configuration from config.ini
