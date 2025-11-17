@@ -19,6 +19,7 @@ Version: 0.1.0-beta.1
     - [Run on HPC Cluster (SLURM)](#run-on-hpc-cluster-slurm)
   - [Step 4: Collect Your Results](#step-4-collect-your-results)
 - [Workflow Overview](#workflow-overview)
+  - [Workflow Visualization](#workflow-visualization)
 - [Utility Scripts](#utility-scripts)
 - [Advanced Configuration](#advanced-configuration)
 - [Output Files](#output-files)
@@ -300,6 +301,36 @@ This Snakemake pipeline processes ONT amplicon data to identify species in mixed
 - Small samples (< 10K reads): ~30 minutes
 - Medium samples (10K-100K reads): 1-3 hours
 - Large samples (> 100K reads): 3-6 hours
+
+### Workflow Visualization
+
+Generate a visual representation of the workflow DAG (Directed Acyclic Graph) to better understand rule dependencies:
+
+```bash
+# Generate rule graph (simplified workflow structure)
+snakemake --rulegraph | dot -Tpng > rulegraph.png
+```
+
+**Requirements:**
+- Graphviz must be installed: `sudo apt-get install graphviz` (Debian/Ubuntu) or `brew install graphviz` (macOS)
+
+**What you get:**
+- `rulegraph.png`: Simplified graph showing rule dependencies
+- Useful for understanding workflow structure and identifying bottlenecks
+
+![Workflow Rule Graph](rulegraph.png)
+
+**Alternative visualizations:**
+
+```bash
+# Full DAG with all jobs (can be large for many samples)
+snakemake --dag | dot -Tpng > dag.png
+
+# File dependency graph
+snakemake --filegraph | dot -Tpng > filegraph.png
+```
+
+**Note:** The rulegraph shows one instance of each rule, while the DAG shows all jobs for all samples and can become very large.
 
 ## Utility Scripts
 
