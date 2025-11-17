@@ -77,8 +77,8 @@ pip install snakemake-executor-plugin-slurm
 #### Downloading This Workflow
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/DataProcessing.git
-cd DataProcessing
+git clone https://github.com/YOUR_USERNAME/PRISCREEN.git
+cd PRISCREEN
 ```
 
 **Note**: All bioinformatics tools (minimap2, samtools, MMseqs2, vsearch, racon, medaka, seqtk) are automatically installed via conda environments - you don't need to install them manually.
