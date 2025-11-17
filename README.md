@@ -2,6 +2,10 @@
 
 Software for evaluating ONT custom amplicon data from PRISTINE (https://github.com/AI-Biome/PRISTINE).
 
+Authors: Tomas Kudlacek, Katharina J. Hoff
+
+Contact: tomas.kudlacek@uni-greifswald.de
+
 Version: 0.1.0-beta.1
 
 ## Table of Contents
