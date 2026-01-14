@@ -89,6 +89,7 @@ include: "rules/mapping.smk"
 include: "rules/clustering.smk"
 include: "rules/consensus.smk"
 include: "rules/identification.smk"
+include: "rules/novelty.smk"
 
 # ============================================================================
 # Cleanup Handlers
