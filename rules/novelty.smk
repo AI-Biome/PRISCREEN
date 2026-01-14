@@ -16,7 +16,8 @@ rule flag_rare_novel:
         min_rel=float(config.get("novelty", {}).get("min_rel_abundance", 0.0)),
         novel_pid=float(config.get("novelty", {}).get("novel_pident", 97.0)),
         novel_qcov=float(config.get("novelty", {}).get("novel_qcov", 0.90)),
-        unclass_is_novel=bool(config.get("novelty", {}).get("treat_unclassified_as_novel", True))
+        treat_unclassified_as_novel=bool(config.get("novelty", {}).get("treat_unclassified_as_novel", True)),
+        min_resolved_rank=str(config.get("novelty", {}).get("min_resolved_rank", "genus"))
     script:
         "../scripts/flag_rare_novel.py"
 

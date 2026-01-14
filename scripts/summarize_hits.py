@@ -1,106 +1,159 @@
 #!/usr/bin/env python3
 import os
-import sys
+import re
 import pandas as pd
 
-try:
-    hits_file   = snakemake.input.hits
-    output_tsv  = snakemake.output.tsv
-    min_pid     = float(snakemake.params.min_pid)
-    min_qcov    = float(snakemake.params.min_qcov)
-    top_delta   = float(snakemake.params.top_delta)
-except NameError:
-    if len(sys.argv) != 6:
-        print("Usage: summarize_hits.py <hits.tsv> <out.tsv> <min_pid> <min_qcov> <top_delta>", file=sys.stderr)
-        sys.exit(2)
-    hits_file, output_tsv, min_pid, min_qcov, top_delta = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])
+hits_path = snakemake.input.hits
+out_tsv = snakemake.output.tsv
 
-def write_empty(path: str):
-    pd.DataFrame(columns=["consensus","best_species","pident","qcov","status"]).to_csv(path, sep="\t", index=False)
+min_pid = float(snakemake.params.min_pid)
+min_qcov = float(snakemake.params.min_qcov)
+top_delta = float(snakemake.params.top_delta)
 
-if not os.path.exists(hits_file) or os.path.getsize(hits_file) == 0:
-    write_empty(output_tsv)
-    sys.exit(0)
+RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
-df = pd.read_csv(hits_file, sep="\t", header=None)
+def parse_target_taxonomy(target: str):
+    tax = {r: None for r in RANKS}
+    if target is None:
+        return tax
 
-if df.empty:
-    write_empty(output_tsv)
-    sys.exit(0)
+    s = str(target).strip()
 
-if df.shape[1] >= 12:
-    cols = ["qseqid","sseqid","pident","alnlen","mismatch","gapopen",
-            "qstart","qend","sstart","send","evalue","bits"]
-    df = df.iloc[:, :len(cols)].copy()
-    df.columns = cols
-    has_qcov = False
-elif df.shape[1] == 4:
-    df.columns = ["qseqid","sseqid","pident","qcov"]
-    has_qcov = True
-else:
-    newcols = ["qseqid","sseqid","pident"] + [f"c{i}" for i in range(df.shape[1]-3)]
-    df.columns = newcols
-    has_qcov = "qcov" in df.columns
+    if "tax=" in s:
+        m = re.search(r"(?:^|\|)tax=([^|]+)", s)
+        if m:
+            parts = [p.strip() for p in m.group(1).split(";") if p.strip()]
+            for i, p in enumerate(parts):
+                if i >= len(RANKS):
+                    break
+                tax[RANKS[i]] = p
+            return tax
 
-for c in ("pident","qcov","bits","alnlen"):
-    if c in df.columns:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+    fields = s.split("|")
+    kv = {}
+    for f in fields[1:]:
+        if "=" in f:
+            k, v = f.split("=", 1)
+            kv[k.strip().lower()] = v.strip()
 
-if not has_qcov:
-    if {"qstart","qend"}.issubset(df.columns):
-        qlen_est = df.groupby("qseqid")["qend"].transform("max").clip(lower=1)
-        df["qcov"] = (df["qend"] - df["qstart"] + 1) / qlen_est * 100.0
-        has_qcov = True
-    else:
-        df["qcov"] = 100.0
-        has_qcov = True
+    for r in RANKS:
+        if r in kv:
+            tax[r] = kv[r]
 
-def parse_species(s):
-    if pd.isna(s):
-        return "UNK"
-    s = str(s)
-    return s.split("|species=")[-1] if "|species=" in s else "UNK"
+    if tax["species"] is None and "species" in kv:
+        tax["species"] = kv["species"]
 
-df["species"] = df["sseqid"].map(parse_species)
+    if tax["species"] is None:
+        tax["species"] = s
 
-pid_cut = min_pid * 100.0
-qcov_cut = min_qcov * 100.0
-df_f = df[(df["pident"] >= pid_cut) & (df["qcov"] >= qcov_cut)].copy()
+    if tax["genus"] is None and tax["species"]:
+        sp = str(tax["species"]).strip()
+        if sp:
+            g = re.split(r"[_\s]+", sp)[0]
+            tax["genus"] = g if g else None
 
-if df_f.empty:
-    write_empty(output_tsv)
-    sys.exit(0)
+    return tax
 
-out_rows = []
-sort_keys = [("pident", False), ("qcov", False)]
-if "bits" in df_f.columns:
-    sort_keys.append(("bits", False))
-if "alnlen" in df_f.columns:
-    sort_keys.append(("alnlen", False))
-by = [k for k, _ in sort_keys]
-asc = [a for _, a in sort_keys]
+def lca_rank_and_name(tax_list):
+    lineages = []
+    for t in tax_list:
+        lineage = []
+        for r in RANKS:
+            v = t.get(r)
+            lineage.append(v if v not in (None, "", "NA", "na", "None") else None)
+        lineages.append(lineage)
 
-for q, sub in df_f.groupby("qseqid"):
-    sub = sub.sort_values(by=by, ascending=asc, kind="mergesort").reset_index(drop=True)
-    if len(sub) == 0:
-        out_rows.append((q, "NO_HIT", None, None, "NO_HIT"))
+    deepest = None
+    for i, r in enumerate(RANKS):
+        vals = [lin[i] for lin in lineages]
+        if any(v is None for v in vals):
+            break
+        if len(set(vals)) == 1:
+            deepest = (r, vals[0])
+        else:
+            break
+
+    return deepest
+
+def status_from_rank(rank):
+    if rank is None:
+        return "AMBIGUOUS"
+    return f"PASS_{rank.upper()}"
+
+if (not os.path.exists(hits_path)) or os.path.getsize(hits_path) == 0:
+    pd.DataFrame(columns=[
+        "consensus", "best_species", "assigned_rank",
+        "pident", "qcov", "bits",
+        "n_hits_considered", "n_distinct_species",
+        "status"
+    ]).to_csv(out_tsv, sep="\t", index=False)
+    raise SystemExit(0)
+
+hits = pd.read_csv(
+    hits_path, sep="\t", header=None,
+    names=["query", "target", "pident", "qcov", "bits"]
+)
+
+for c in ["pident", "qcov", "bits"]:
+    hits[c] = pd.to_numeric(hits[c], errors="coerce")
+
+rows = []
+for q, dfq in hits.groupby("query", sort=False):
+    dfq = dfq.dropna(subset=["pident", "qcov", "bits"])
+    dfq = dfq[(dfq["pident"] >= min_pid) & (dfq["qcov"] >= min_qcov)]
+
+    if dfq.empty:
+        rows.append({
+            "consensus": q,
+            "best_species": "",
+            "assigned_rank": "",
+            "pident": "",
+            "qcov": "",
+            "bits": "",
+            "n_hits_considered": 0,
+            "n_distinct_species": 0,
+            "status": "NO_HIT"
+        })
         continue
 
-    top = sub.iloc[0]
-    status = "OK"
-    if len(sub) > 1:
-        p1 = float(top["pident"])
-        p2 = float(sub.iloc[1]["pident"])
-        if p1 > 0.0 and (p1 - p2) / p1 < top_delta:
-            status = "AMBIGUOUS"
+    best_bits = float(dfq["bits"].max())
+    band = dfq[dfq["bits"] >= (best_bits - top_delta)].copy()
+    band = band.sort_values(["bits", "pident", "qcov"], ascending=[False, False, False])
 
-    out_rows.append((
-        str(q),
-        str(top["species"]),
-        float(top["pident"]) / 100.0,
-        float(top["qcov"])   / 100.0,
-        status
-    ))
+    tax_list = [parse_target_taxonomy(t) for t in band["target"].tolist()]
+    species_list = [t.get("species") for t in tax_list if t.get("species") not in (None, "", "NA", "na", "None")]
+    distinct_species = sorted(set(species_list))
 
-out = pd.DataFrame(out_rows, columns=["consensus","best_species","pident","qcov","status"])
-out.to_csv(output_tsv, sep="\t", index=False)
+    top = band.iloc[0]
+    assigned_rank = None
+    assigned_name = None
+
+    if len(distinct_species) == 1:
+        assigned_rank = "species"
+        assigned_name = distinct_species[0]
+    else:
+        lca = lca_rank_and_name(tax_list)
+        if lca is not None:
+            assigned_rank, assigned_name = lca
+        else:
+            assigned_rank, assigned_name = None, None
+
+    rows.append({
+        "consensus": q,
+        "best_species": assigned_name if assigned_name is not None else "",
+        "assigned_rank": assigned_rank if assigned_rank is not None else "",
+        "pident": float(top["pident"]),
+        "qcov": float(top["qcov"]),
+        "bits": float(top["bits"]),
+        "n_hits_considered": int(band.shape[0]),
+        "n_distinct_species": int(len(distinct_species)),
+        "status": status_from_rank(assigned_rank)
+    })
+
+out = pd.DataFrame(rows, columns=[
+    "consensus", "best_species", "assigned_rank",
+    "pident", "qcov", "bits",
+    "n_hits_considered", "n_distinct_species",
+    "status"
+])
+out.to_csv(out_tsv, sep="\t", index=False)
