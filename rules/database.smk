@@ -4,9 +4,10 @@ Rules for database preparation
 
 rule mmseqs_createdb:
     input:
-        PANEL_FASTA
+        panel=lambda wc: PANEL_FASTA[wc.amplicon]
     output:
-        db = directory("results/mmseqs/panelDB")
+        dbdir=directory("results/mmseqs/{amplicon}/panelDB"),
+        done="results/mmseqs/{amplicon}/panelDB/db.done"
     conda:
         "../envs/mmseqs.yaml"
     threads: THREADS_MMSEQS
@@ -16,6 +17,8 @@ rule mmseqs_createdb:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {output.db}
-        mmseqs createdb {input} {output.db}/panelDB
+        mkdir -p {output.dbdir}
+        mmseqs createdb {input.panel} {output.dbdir}/panelDB
+        mmseqs createindex {output.dbdir}/panelDB results/mmseqs/tmp --search-type 3
+        touch {output.done}
         """
