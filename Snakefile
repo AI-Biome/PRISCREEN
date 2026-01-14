@@ -78,7 +78,9 @@ rule all:
             "results/identify/{sample}/{amplicon}/species_summary.tsv",
             sample=SAMPLES,
             amplicon=AMP_LIST
-        )
+        ),
+        expand("results/identify/{sample}/novelty_summary.tsv", sample=SAMPLES),
+        expand("results/identify/{sample}/{amplicon}/novelty_flags.tsv", sample=SAMPLES, amplicon=AMP_LIST)
 
 # ============================================================================
 # Include Rule Modules
