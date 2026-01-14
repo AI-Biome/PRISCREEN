@@ -73,7 +73,11 @@ IDENT_TOP_DELTA = float(config["identify"]["top_delta"])
 
 rule all:
     input:
-        expand("results/identify/{sample}/species_summary.tsv", sample=SAMPLES)
+        expand(
+            "results/identify/{sample}/{amplicon}/species_summary.tsv",
+            sample=SAMPLES,
+            amplicon=AMP_LIST
+        )
 
 # ============================================================================
 # Include Rule Modules
