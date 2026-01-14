@@ -49,15 +49,15 @@ def select_racon_output():
 
 rule consensus_polish:
     input:
-        racon = select_racon_output(),
-        fq = "results/bin/{sample}/fastq/{amplicon}.fq.gz",
-        cents = lambda wc: (
+        racon=select_racon_output(),
+        fq="results/bin/{sample}/fastq/{amplicon}.fq.gz",
+        cents=lambda wc: (
             f"results/cluster/{wc.sample}/{wc.amplicon}/centroids.fasta"
             if CLUSTER else
             []
         )
     output:
-        cons = "results/consensus/{sample}/{amplicon}/consensus.fasta"
+        cons="results/consensus/{sample}/{amplicon}/consensus.fasta"
     conda:
         "../envs/consensus.yaml"
     threads: THREADS_POLISH
@@ -65,8 +65,8 @@ rule consensus_polish:
         mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * THREADS_POLISH // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
         runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     params:
-        rounds = int(config["consensus"]["racon_rounds"]),
-        model  = config["consensus"]["medaka_model"],
-        clustered = CLUSTER
+        rounds=int(config["consensus"]["racon_rounds"]),
+        model=lambda wc: AMPLICONS[wc.amplicon].get("medaka_model", config["consensus"]["medaka_model"]),
+        clustered=CLUSTER
     script:
         "../scripts/consensus_polish.py"
