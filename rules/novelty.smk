@@ -21,7 +21,6 @@ rule flag_rare_novel:
     script:
         "../scripts/flag_rare_novel.py"
 
-
 rule sample_novelty_summary:
     input:
         flags=expand("results/identify/{{sample}}/{amplicon}/novelty_flags.tsv", amplicon=AMP_LIST)
