@@ -50,8 +50,9 @@ SAMPLES = SAMPLES_DF["sample"].tolist()
 FASTQ = {r.sample: r.fastq for r in SAMPLES_DF.itertuples()}
 
 # Panel and amplicons
-PANEL_FASTA = config["multi_species"]["panel_fasta"]
-AMP_LIST = get_amplicons_from_panel(PANEL_FASTA)
+AMPLICONS = config["amplicons"]
+AMP_LIST = sorted(AMPLICONS.keys())
+PANEL_FASTA = {a: AMPLICONS[a]["panel_fasta"] for a in AMP_LIST}
 
 # Thread configuration
 THREADS_MAP = int(config["threads"].get("map", 8))
