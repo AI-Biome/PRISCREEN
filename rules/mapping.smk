@@ -1,10 +1,26 @@
+rule build_mapping_panel:
+    input:
+        list(PANEL_FASTA.values())
+    output:
+        fa="results/map/panel_all.fasta"
+    threads: 1
+    resources:
+        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
+        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p results/map
+        cat {input} > {output.fa}
+        """
+
 rule map_to_panel:
     input:
         fq=lambda wc: FASTQ[wc.sample],
-        ref=lambda wc: PANEL_FASTA[wc.amplicon]
+        ref="results/map/panel_all.fasta"
     output:
-        bam=temp("results/map/{sample}/{amplicon}.panel.sorted.bam"),
-        bai=temp("results/map/{sample}/{amplicon}.panel.sorted.bam.bai")
+        bam=temp("results/map/{sample}.panel.sorted.bam"),
+        bai=temp("results/map/{sample}.panel.sorted.bam.bai")
     conda:
         "../envs/minimap2.yaml"
     threads: THREADS_MAP
@@ -14,7 +30,7 @@ rule map_to_panel:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p results/map/{wildcards.sample}
+        mkdir -p results/map
         minimap2 -t {threads} -ax map-ont -N 10 --secondary=yes {input.ref} {input.fq} \
           | samtools view -b - \
           | samtools sort -o {output.bam}
@@ -23,9 +39,12 @@ rule map_to_panel:
 
 rule amplicon_readnames:
     input:
-        bam="results/map/{sample}/{amplicon}.panel.sorted.bam"
+        bam="results/map/{sample}.panel.sorted.bam"
     output:
-        names="results/bin/{sample}/readlists/{amplicon}.names"
+        lists=directory("results/bin/{sample}/readlists"),
+        names=expand("results/bin/{{sample}}/readlists/{amp}.names", amp=AMP_LIST)
+    params:
+        amps=" ".join(AMP_LIST)
     conda:
         "../envs/samtools.yaml"
     resources:
@@ -34,10 +53,21 @@ rule amplicon_readnames:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p results/bin/{wildcards.sample}/readlists
+        mkdir -p {output.lists}
+
         samtools view {input.bam} \
-          | awk -F'\t' '$3!="*"{{print $1}}' \
-          | sort -u > {output.names}
+          | awk -F'\t' 'BEGIN{{OFS="\t"}} $3!="*"{{split($3,a,"|"); print $1,a[1]}}' \
+          | sort -u > {output.lists}/qname_amp.tsv
+
+        cut -f2 {output.lists}/qname_amp.tsv | sort -u > {output.lists}/amps.txt
+
+        for AMP in {params.amps}; do
+          touch {output.lists}/"$AMP".names
+        done
+
+        while read AMP; do
+          awk -v A="$AMP" '$2==A{{print $1}}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
+        done < {output.lists}/amps.txt
         """
 
 rule amplicon_fastq:
