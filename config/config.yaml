@@ -16,6 +16,7 @@ consensus:
   medaka_model: "r1041_e82_400bps_hac_v4.2.0"
 
 identify:
+  enable: true
   min_pident: 0.985
   min_qcov: 0.90
   top_delta: 0.01

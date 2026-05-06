@@ -68,6 +68,8 @@ IDENT_MIN_PID = float(config["identify"]["min_pident"])
 IDENT_MIN_QCOV = float(config["identify"]["min_qcov"])
 IDENT_TOP_DELTA = float(config["identify"]["top_delta"])
 
+IDENTIFY = bool(config.get("identify", {}).get("enable", True))
+
 # ============================================================================
 # Target Rule
 # ============================================================================
