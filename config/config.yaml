@@ -1,3 +1,10 @@
+taxonomy:
+  mode: "hybrid"   # panel | hybrid | none
+
+generic_db:
+  fasta: "data/generic/gtdb.fasta"
+  name: "genericDB"
+
 multi_species:
   panel_fasta: "data/reference_amplicons.fasta"
 

@@ -49,6 +49,12 @@ SAMPLES_DF = pd.read_csv("config/samples.tsv", sep="\t")
 SAMPLES = SAMPLES_DF["sample"].tolist()
 FASTQ = {r.sample: r.fastq for r in SAMPLES_DF.itertuples()}
 
+# Taxonomy mode
+TAXONOMY_MODE = config.get("taxonomy", {}).get("mode", "panel")
+
+if TAXONOMY_MODE not in {"panel", "hybrid", "none"}:
+    raise ValueError("taxonomy.mode must be one of: panel, hybrid, none")
+
 # Panel and amplicons
 AMPLICONS = config["amplicons"]
 AMP_LIST = sorted(AMPLICONS.keys())
@@ -88,12 +94,19 @@ rule all:
 # Include Rule Modules
 # ============================================================================
 
-include: "rules/database.smk"
 include: "rules/mapping.smk"
 include: "rules/clustering.smk"
 include: "rules/consensus.smk"
-include: "rules/identification.smk"
-include: "rules/novelty.smk"
+
+if TAXONOMY_MODE == "panel":
+    include: "rules/database.smk"
+    include: "rules/identification.smk"
+    include: "rules/novelty.smk"
+
+elif TAXONOMY_MODE == "hybrid":
+    include: "rules/generic_database.smk"
+    include: "rules/generic_identification.smk"
+    include: "rules/novelty.smk"
 
 # ============================================================================
 # Cleanup Handlers
