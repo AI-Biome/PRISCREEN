@@ -80,15 +80,26 @@ IDENTIFY = bool(config.get("identify", {}).get("enable", True))
 # Target Rule
 # ============================================================================
 
-rule all:
-    input:
-        expand(
-            "results/identify/{sample}/{amplicon}/species_summary.tsv",
-            sample=SAMPLES,
-            amplicon=AMP_LIST
-        ),
-        expand("results/identify/{sample}/novelty_summary.tsv", sample=SAMPLES),
-        expand("results/identify/{sample}/{amplicon}/novelty_flags.tsv", sample=SAMPLES, amplicon=AMP_LIST)
+if TAXONOMY_MODE == "panel":
+    rule all:
+        input:
+            expand("results/identify/{sample}/species_summary.tsv", sample=SAMPLES),
+            expand("results/identify/{sample}/novelty_summary.tsv", sample=SAMPLES)
+
+elif TAXONOMY_MODE == "hybrid":
+    rule all:
+        input:
+            expand("results/generic_identify/{sample}/generic_summary.tsv", sample=SAMPLES),
+            expand("results/generic_identify/{sample}/novelty_summary.tsv", sample=SAMPLES)
+
+else:
+    rule all:
+        input:
+            expand(
+                "results/consensus/{sample}/{amplicon}/consensus.fasta",
+                sample=SAMPLES,
+                amplicon=AMP_LIST
+            )
 
 # ============================================================================
 # Include Rule Modules
