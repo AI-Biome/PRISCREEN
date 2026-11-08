@@ -210,7 +210,14 @@ samples: config/samples.tsv
 
 containers:                   # one BioContainers image per tool, used with --sdm apptainer
   minimap2: docker://quay.io/biocontainers/minimap2:2.31--h118bc1c_0
-  # ... samtools, vsearch, mmseqs2, chopper, racon, medaka, python (see config/config.yaml)
+  minimap2_samtools: docker://quay.io/biocontainers/mulled-v2-66534bcbb7031a148b13e2ad42583020b9cd25c4:ad4c240457048f1d3cc0bd8c8fa39bf27d222eb7-0
+  samtools: docker://quay.io/biocontainers/samtools:1.24--h9dcdb79_1
+  vsearch: docker://quay.io/biocontainers/vsearch:2.32.0--hd2be7a0_0
+  mmseqs2: docker://quay.io/biocontainers/mmseqs2:18.8cc5c--hd6d6fdc_0
+  chopper: docker://quay.io/biocontainers/chopper:0.15.0--h7f49ad2_0
+  racon: docker://quay.io/biocontainers/racon:1.5.0--h077b44d_8
+  medaka: docker://quay.io/biocontainers/medaka:2.2.1--py311h063c2b6_0   # also minimap2, samtools, pysam, numpy
+  python: docker://quay.io/biocontainers/pandas:2.2.1                    # Python + pandas for the table scripts
 
 panel:
   fasta: data/reference_amplicons.fasta
