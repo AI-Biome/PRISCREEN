@@ -18,10 +18,8 @@ identification: a species that gets many unique votes is likely present even
 when its consensus is shared with a relative.
 """
 
-import sys
+import csv
 from collections import defaultdict
-
-import pandas as pd
 
 
 def species_of(ref: str):
@@ -35,9 +33,9 @@ def species_of(ref: str):
 
 
 def parse_sam(lines, min_margin: int, panel_amplicons=None):
-    """Count votes from SAM lines (no header) in any order (the BAM is coordinate-sorted, so the
-    secondary records of a read may precede its primary). Only amplicons in ``panel_amplicons``
-    (all when None) are counted."""
+    """Vote rows (one dict per amplicon and species) from SAM lines (no header) in any order (the BAM is
+    coordinate-sorted, so the secondary records of a read may precede its primary). Only amplicons in
+    ``panel_amplicons`` (all when None) are counted. Plain Python: the rule runs in the Medaka container."""
     primary = {}                      # qname -> (amp, species, AS)
     secondaries = defaultdict(list)   # qname -> [(amp, species, AS)]
     for line in lines:
@@ -78,26 +76,41 @@ def parse_sam(lines, min_margin: int, panel_amplicons=None):
             v[1] += 1
         if other < 0 or score - other >= min_margin:
             v[2] += 1
-    rows = [dict(amplicon=a, species=s, reads=v[0], reads_unique=v[1], **{f"reads_margin_ge_{min_margin}": v[2]})
-            for (a, s), v in sorted(votes.items())]
-    cols = ["amplicon", "species", "reads", "reads_unique", f"reads_margin_ge_{min_margin}"]
-    df = pd.DataFrame(rows, columns=cols)
-    if not df.empty:
-        df["fraction_of_amplicon_reads"] = df["reads"] / df.groupby("amplicon")["reads"].transform("sum")
-    else:
-        df["fraction_of_amplicon_reads"] = []
-    return df
+    per_amplicon = defaultdict(int)
+    for (a, _), v in votes.items():
+        per_amplicon[a] += v[0]
+    rows = []
+    for (a, s), v in sorted(votes.items()):
+        rows.append({"amplicon": a, "species": s, "reads": v[0], "reads_unique": v[1],
+                     f"reads_margin_ge_{min_margin}": v[2],
+                     "fraction_of_amplicon_reads": v[0] / per_amplicon[a] if per_amplicon[a] else 0.0})
+    return rows
+
+
+def columns(min_margin: int):
+    return ["amplicon", "species", "reads", "reads_unique", f"reads_margin_ge_{min_margin}", "fraction_of_amplicon_reads"]
+
+
+def write_rows(rows, path, min_margin: int) -> None:
+    cols = columns(min_margin)
+    with open(path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        for r in rows:
+            r = dict(r)
+            r["fraction_of_amplicon_reads"] = f"{r['fraction_of_amplicon_reads']:.4f}"
+            w.writerow(r)
 
 
 def main(smk) -> None:
     import subprocess
     min_margin = int(smk.params.min_margin)
     proc = subprocess.Popen(["samtools", "view", smk.input.bam], stdout=subprocess.PIPE, text=True)
-    df = parse_sam(proc.stdout, min_margin, set(smk.params.panel_amplicons))
+    rows = parse_sam(proc.stdout, min_margin, set(smk.params.panel_amplicons))
     proc.wait()
     if proc.returncode != 0:
         raise RuntimeError("samtools view failed")
-    df.to_csv(smk.output.tsv, sep="\t", index=False, float_format="%.4f")
+    write_rows(rows, smk.output.tsv, min_margin)
 
 
 if __name__ == "__main__":

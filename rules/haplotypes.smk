@@ -22,5 +22,7 @@ rule haplotype_split:
         keep_bam=bool(cfg("haplotypes", "keep_bam", default=False))
     resources:
         mem_mb=mem_mb(THREADS_POLISH, 4000), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["medaka"]
     script:
         "../scripts/haplotype_split.py"

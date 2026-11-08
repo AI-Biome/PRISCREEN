@@ -1,12 +1,17 @@
 # Snakemake profile for SLURM clusters:  snakemake --profile profiles/slurm
-# Run it from the pixi environment (pixi shell, or pixi run snakemake ...); the
-# jobs inherit PATH, so every tool comes from ./.pixi. Memory and runtime of the
-# rules are derived from config/config.yaml (resources: mem_mb_per_cpu, runtime_min).
+# Every job runs inside the public BioContainers image of its tool (config: containers:, pulled
+# once into .snakemake/singularity/). The host needs only Snakemake and the SLURM executor plugin:
+#   pixi install -e host && pixi run -e host snakemake --profile profiles/slurm
+# Memory and runtime of the rules come from config/config.yaml (resources: mem_mb_per_cpu, runtime_min).
 executor: slurm
 jobs: 50
 printshellcmds: true
 rerun-incomplete: true
 keep-going: true
+software-deployment-method: apptainer
+# Bind every path the jobs read or write (repository, data, results). /home covers the usual case;
+# add scratch roots as needed, e.g. "-B /home -B /scratch".
+apptainer-args: "-B /home"
 default-resources:
   - slurm_partition=batch     # your partition
   # - slurm_account=myaccount

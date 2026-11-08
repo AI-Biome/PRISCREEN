@@ -1,0 +1,7 @@
+# Local run with every rule in its BioContainers image:  snakemake --profile profiles/local --cores 8
+# Snakemake starts the containers with its own home setting, which switches off Singularity's default
+# bind of $HOME, so the repository, data and results must be bound explicitly (add scratch roots as needed).
+software-deployment-method: apptainer
+apptainer-args: "-B /home"
+printshellcmds: true
+rerun-incomplete: true

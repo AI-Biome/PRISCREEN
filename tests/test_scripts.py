@@ -3,7 +3,14 @@ import pandas as pd
 
 import summarize_hits
 from flag_rare_novel import flag
-from read_votes import parse_sam
+from read_votes import parse_sam as _parse_sam
+
+
+def parse_sam(lines, min_margin, panel_amplicons=None):
+    """Vote rows as a DataFrame indexed by (amplicon, species), for compact assertions."""
+    rows = _parse_sam(lines, min_margin, panel_amplicons)
+    cols = ["amplicon", "species", "reads", "reads_unique", f"reads_margin_ge_{min_margin}", "fraction_of_amplicon_reads"]
+    return pd.DataFrame(rows, columns=cols)
 from taxonomy import lowest_common_rank, parse_header_taxonomy, rank_index
 
 

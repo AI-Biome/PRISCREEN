@@ -15,7 +15,7 @@ digraph PRISCREEN {
     map    [label="Map reads to binning reference\n[map_to_reference]  per sample", fillcolor="#eaf1f8", color="#2c6aa0"]
     bin    [label="Bin reads by amplicon (primary alignment)\n[bin_reads]  per sample and amplicon", fillcolor="#eaf1f8", color="#2c6aa0"]
     clust  [label="Cluster reads, drop small clusters\n[cluster_reads]  per sample and amplicon", fillcolor="#ebf5ee", color="#2e7d4f"]
-    polish [label="Polish centroids: Racon rounds + Medaka\n[consensus_polish]  per sample", fillcolor="#ebf5ee", color="#2e7d4f"]
+    polish [label="Polish centroids: Racon rounds + Medaka\n[racon, medaka, consensus_collect]  per sample", fillcolor="#ebf5ee", color="#2e7d4f"]
     hap    [label="Split mixed clusters into haplotypes (SNPs, indels)\n[haplotype_split]  per sample", fillcolor="#ebf5ee", color="#2e7d4f"]
     db     [label="MMseqs2 databases\n[mmseqs_createdb]  panel + one per rRNA amplicon", fillcolor="#fbf1e4", color="#b86e12"]
     search [label="Search consensus sequences\n[mmseqs_search]  per sample and database", fillcolor="#fbf1e4", color="#b86e12"]

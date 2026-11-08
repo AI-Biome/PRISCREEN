@@ -16,8 +16,14 @@ def snakemake(root, workdir, *args):
 def test_dry_run(root, tmp_path):
     r = snakemake(root, tmp_path, "-n", "--cores", "2")
     assert r.returncode == 0, r.stderr + r.stdout
-    assert "consensus_polish" in r.stdout and "read_votes" in r.stdout and "mmseqs_search" in r.stdout
+    assert "medaka" in r.stdout and "racon" in r.stdout and "read_votes" in r.stdout and "mmseqs_search" in r.stdout
     assert "haplotype_split" in r.stdout
+
+
+def test_dry_run_with_container(root, tmp_path):
+    r = snakemake(root, tmp_path, "-n", "--cores", "2", "--profile", str(root / "profiles" / "local"))
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert "quay.io/biocontainers/medaka" in r.stdout + r.stderr and "quay.io/biocontainers/racon" in r.stdout + r.stderr
 
 
 def test_dry_run_without_haplotypes(root, tmp_path):

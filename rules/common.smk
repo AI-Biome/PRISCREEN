@@ -165,6 +165,28 @@ CONS_DIR = "results/haplotypes" if HAPLOTYPES else "results/consensus"
 INDEX_RRNA_DB = bool(cfg("identify", "index_rrna_db", default=False))
 
 MEM_MB_PER_CPU = int(cfg("resources", "mem_mb_per_cpu", default=2600))
+
+# ----------------------------------------------------------------------------
+# Containers (used with --software-deployment-method apptainer): public BioContainers,
+# one per tool; overridable per key under `containers:` in the config (URI or local .sif).
+# ----------------------------------------------------------------------------
+CONTAINER_DEFAULTS = {
+    "minimap2": "docker://quay.io/biocontainers/minimap2:2.31--h118bc1c_0",
+    "minimap2_samtools": "docker://quay.io/biocontainers/mulled-v2-66534bcbb7031a148b13e2ad42583020b9cd25c4:ad4c240457048f1d3cc0bd8c8fa39bf27d222eb7-0",
+    "samtools": "docker://quay.io/biocontainers/samtools:1.24--h9dcdb79_1",
+    "vsearch": "docker://quay.io/biocontainers/vsearch:2.32.0--hd2be7a0_0",
+    "mmseqs2": "docker://quay.io/biocontainers/mmseqs2:18.8cc5c--hd6d6fdc_0",
+    "chopper": "docker://quay.io/biocontainers/chopper:0.15.0--h7f49ad2_0",
+    "racon": "docker://quay.io/biocontainers/racon:1.5.0--h077b44d_8",
+    "medaka": "docker://quay.io/biocontainers/medaka:2.2.1--py311h063c2b6_0",   # also minimap2, samtools, pysam, numpy
+    "python": "docker://quay.io/biocontainers/pandas:2.2.1",                   # python + pandas for the table scripts
+}
+CONTAINERS = {}
+for _key, _default in CONTAINER_DEFAULTS.items():
+    _img = cfg("containers", _key, default=_default)
+    if not str(_img).startswith(("docker://", "shub://", "library://", "oras://", "http://", "https://")) and not os.path.isabs(_img):
+        _img = os.path.join(workflow.basedir, _img)
+    CONTAINERS[_key] = _img
 RUNTIME_MIN = int(cfg("resources", "runtime_min", default=120))
 
 

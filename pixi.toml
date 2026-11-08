@@ -28,10 +28,21 @@ mmseqs2 = ">=15.6"
 racon = ">=1.5"
 medaka = ">=2.0"
 chopper = ">=0.9"
-pigz = "*"
 graphviz = "*"
 matplotlib-base = "*"
 pytest = "*"
+
+# Slim environment for cluster hosts that run every job in the container: Snakemake and the
+# SLURM executor only (pixi install -e host; pixi run -e host snakemake --profile profiles/slurm).
+[feature.host.dependencies]
+python = "3.11.*"
+snakemake = ">=9.0"
+snakemake-executor-plugin-slurm = ">=1.0"
+pandas = ">=2.2"
+pyyaml = "*"
+
+[environments]
+host = { features = ["host"], no-default-feature = true }
 
 [tasks]
 priscreen = "snakemake --cores all"

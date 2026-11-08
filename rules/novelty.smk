@@ -19,6 +19,8 @@ rule flag_rare_novel:
         min_resolved_rank=str(cfg("novelty", "min_resolved_rank", default="genus"))
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["python"]
     script:
         "../scripts/flag_rare_novel.py"
 
@@ -34,5 +36,7 @@ rule novelty_summary:
         columns=NOVELTY_COLUMNS
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["python"]
     script:
         "../scripts/sample_summary.py"

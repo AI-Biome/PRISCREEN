@@ -12,15 +12,18 @@ rule build_panel_from_pristine:
     log:
         "logs/panel/build_panel_from_pristine.log"
     params:
-        dirs=" ".join(shlex.quote(d) for d in PRISTINE_DIRS)
+        dirs=PRISTINE_DIRS
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
-    shell:
-        "python {workflow.basedir}/scripts/pristine_to_panel.py {params.dirs} -o {output.fa} 2> {log}"
+    container:
+        CONTAINERS["python"]
+    script:
+        "../scripts/build_panel.py"
 
 
 rule mapping_reference:
-    """One FASTA for binning: panel records as they are, rRNA bin references prefixed '<amplicon>|'."""
+    """One FASTA for binning: panel records as they are (id = first header token), rRNA bin references
+    prefixed '<amplicon>|'; indexed with samtools faidx."""
     input:
         panel=[PANEL_FASTA] if PANEL_AMPLICONS else [],
         rrna=[RRNA[n]["bin_reference"] for n in RRNA_NAMES]
@@ -30,24 +33,27 @@ rule mapping_reference:
     log:
         "logs/mapping_reference.log"
     params:
-        rrna_names=RRNA_NAMES
+        panel=lambda wc, input: " ".join(shlex.quote(p) for p in input.panel),
+        rrna=lambda wc, input: " ".join(shlex.quote(f"{n}={p}") for n, p in zip(RRNA_NAMES, input.rrna))
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
-    run:
-        with open(output.fa, "w") as out:
-            for p in input.panel:
-                with open(p) as fh:
-                    for line in fh:
-                        if line.startswith(">"):
-                            line = ">" + line[1:].split()[0] + "\n"
-                        out.write(line)
-            for name, p in zip(params.rrna_names, input.rrna):
-                with open(p) as fh:
-                    for line in fh:
-                        if line.startswith(">"):
-                            line = f">{name}|{line[1:].split()[0]}\n"
-                        out.write(line)
-        shell("samtools faidx {output.fa}")
+    container:
+        CONTAINERS["samtools"]
+    shell:
+        r"""
+        set -euo pipefail
+        : > {output.fa}
+        for f in {params.panel} ""; do
+            [ -n "$f" ] || continue
+            awk '/^>/ {{print ">" substr($1, 2); next}} {{print}}' "$f" >> {output.fa}
+        done
+        for np in {params.rrna} ""; do
+            [ -n "$np" ] || continue
+            n="${{np%%=*}}"; p="${{np#*=}}"
+            awk -v N="$n" '/^>/ {{print ">" N "|" substr($1, 2); next}} {{print}}' "$p" >> {output.fa}
+        done
+        samtools faidx {output.fa} 2> {log}
+        """
 
 
 rule mmseqs_createdb:
@@ -65,6 +71,8 @@ rule mmseqs_createdb:
         index=lambda wc: "1" if (wc.db != "panel" and INDEX_RRNA_DB) else "0"
     resources:
         mem_mb=mem_mb(THREADS_MMSEQS, 4000), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["mmseqs2"]
     shell:
         r"""
         set -euo pipefail

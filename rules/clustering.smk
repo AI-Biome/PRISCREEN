@@ -19,15 +19,17 @@ rule cluster_reads:
         min_size=CLUSTER_MIN_SIZE
     resources:
         mem_mb=mem_mb(4), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["vsearch"]
     shell:
         r"""
         set -euo pipefail
-        if [ "$(pigz -dc {input.fq} | head -c 1 | wc -c)" = "0" ]; then
+        if [ "$(gzip -dc {input.fq} | head -c 1 | wc -c)" = "0" ]; then
             : > {output.cents}; : > {output.all_cents}; : > {output.uc}
             echo "no reads" > {log}
             exit 0
         fi
-        pigz -dc {input.fq} \
+        gzip -dc {input.fq} \
           | vsearch --cluster_fast - --id {params.id} --strand both --qmask none --sizeout \
                     --gapopen 4I/4E --gapext 2I/2E \
                     --threads {threads} --relabel {wildcards.sample}_{wildcards.amplicon}_centroid_ \

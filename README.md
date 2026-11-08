@@ -56,6 +56,36 @@ Medaka downloads its basecaller-specific model on first use. On a cluster
 without internet access on the compute nodes, fetch the models once from the login
 node: `pixi run medaka tools download_models`.
 
+### Containers
+
+Every rule can run in a public container instead of the local pixi environment:
+one [BioContainers](https://biocontainers.pro) image per tool (minimap2,
+samtools, vsearch, MMseqs2, chopper, Racon, Medaka, pandas), pinned in
+`config/config.yaml` under `containers:`. No image of our own is built or
+published. The SLURM profile uses them by default; the host then needs only
+Snakemake and the SLURM executor, which the slim `host` environment provides:
+
+```bash
+pixi install -e host                                   # snakemake + SLURM plugin only, no tools
+pixi run -e host snakemake --profile profiles/slurm    # jobs run in the containers
+pixi run snakemake --profile profiles/local --cores 8  # local run in the containers
+```
+
+Images are pulled once into `.snakemake/singularity/`. On a cluster without
+internet on the compute nodes, pull them on the login node (a dry run with
+`--sdm apptainer` lists them; `singularity pull <uri>`) and point the
+`containers:` keys at the `.sif` files. Singularity binds the working
+directory, `$HOME` and `/tmp` by default and the profile adds `-B /home`; data,
+repository and results must lie under bound paths (add `-B /scratch` and the
+like to `apptainer-args` in the profiles). Snakemake starts the containers with
+its own home setting, which switches off Singularity's default `$HOME` bind,
+hence the explicit `-B /home` in both profiles; a bare `--sdm apptainer` without
+it fails with "does not exist" for files under `/home`. Medaka looks for models in its
+package directory (read-only inside the image) and in `~/.medaka/data`, where it
+caches downloads, so one download serves all jobs; without internet on the
+compute nodes run `medaka tools download_models --models <name>` once on the
+login node.
+
 ## Quick start with the toy data
 
 The repository ships two toy samples (`data/Test1.fastq.gz`, `data/Test2.fastq.gz`),
@@ -63,7 +93,7 @@ a two-amplicon panel (`data/reference_amplicons.fasta`) and a four-sequence
 "16S database" (`data/toy_16S_db.fasta`). `config/config.yaml` points at them.
 
 ```bash
-pixi run snakemake -n --cores 4      # dry run: 44 jobs
+pixi run snakemake -n --cores 4      # dry run: 58 jobs
 pixi run snakemake --cores 4         # about 4 minutes; writes results/ and logs/
 column -t -s $'\t' results/identify/Test2/species_summary.tsv
 ```
@@ -178,6 +208,10 @@ A run may have only rRNA amplicons (`panel: {fasta: null}`) or only the panel.
 ```yaml
 samples: config/samples.tsv
 
+containers:                   # one BioContainers image per tool, used with --sdm apptainer
+  minimap2: docker://quay.io/biocontainers/minimap2:2.31--h118bc1c_0
+  # ... samtools, vsearch, mmseqs2, chopper, racon, medaka, python (see config/config.yaml)
+
 panel:
   fasta: data/reference_amplicons.fasta
   pristine_output: null       # PRISTINE output directory (or list); overrides fasta
@@ -242,14 +276,16 @@ resources: {mem_mb_per_cpu: 2600, runtime_min: 120}   # SLURM only
 ## Running
 
 ```bash
-pixi run snakemake --cores 16                     # local
+pixi run snakemake --cores 16                     # local, pixi environment
 pixi run snakemake --cores 16 --configfile my_config.yaml
-pixi run snakemake --profile profiles/slurm       # SLURM; edit the partition in profiles/slurm/config.yaml
+pixi run snakemake --profile profiles/local --cores 16   # local, tool containers
+pixi run -e host snakemake --profile profiles/slurm      # SLURM + containers; edit the partition in profiles/slurm/config.yaml
 ```
 
-Jobs submitted to SLURM inherit the pixi environment through `PATH`. Memory is
-requested as `mem_mb_per_cpu` times the threads of a rule (at least 1 to 8 GB
-depending on the rule) and the runtime as `runtime_min`. `snakemake -n` shows
+Jobs submitted to SLURM run inside the tool containers (see Installation,
+Containers); without `--sdm apptainer` they use the pixi environment through
+`PATH`. Memory is requested as `mem_mb_per_cpu` times the threads of a rule (at
+least 1 to 8 GB depending on the rule) and the runtime as `runtime_min`. `snakemake -n` shows
 the plan, `snakemake --rerun-incomplete` resumes after a failure, and
 `logs/<rule>/` holds one log per job.
 
@@ -275,12 +311,14 @@ Step numbers follow the figure. Rule names are in brackets.
    the threshold must stay below that; close variants that end up in one
    cluster are separated in step 5. Clusters with fewer than `min_size` reads
    cannot be polished and are dropped here (their reads are counted in step 4).
-4. Polish [`consensus_polish`]. The centroids of all amplicons of a sample are
-   polished together: reads are mapped to all centroids (primary alignments only,
-   so each read polishes one centroid), Racon runs `racon_rounds` times, then
-   Medaka once per sample. The reads mapped to each consensus in the final
-   alignment are counted (`cluster_sizes.tsv`). Running Medaka once per sample
-   instead of once per amplicon removes most of its start-up cost.
+4. Polish [`polish_prepare`, `racon_map`, `racon`, `medaka`, `count_mapped`,
+   `consensus_collect`]. The centroids of all amplicons of a sample are polished
+   together: reads are mapped to all centroids (primary alignments only, so
+   each read polishes one centroid), Racon runs `racon_rounds` times, then
+   Medaka once per sample (each tool in its own container). The reads mapped to
+   each consensus in the final alignment are counted (`cluster_sizes.tsv`).
+   Running Medaka once per sample instead of once per amplicon removes most of
+   its start-up cost.
 5. Split haplotypes [`haplotype_split`]. The reads of all bins are mapped to
    the consensus sequences of the sample (primary alignments only). For every
    consensus, candidate sites are collected from the alignment: substitutions
@@ -456,7 +494,9 @@ use.
 ## Changes in 0.2.0
 
 - Dependencies managed with pixi (conda-forge + bioconda only); Racon and Medaka
-  come from bioconda instead of a source build at run time.
+  come from bioconda instead of a source build at run time. With
+  `--sdm apptainer` (default in the SLURM profile) every rule runs in a public
+  BioContainers image of its tool.
 - Per-amplicon routing: PRISTINE amplicons are identified against the panel,
   rRNA amplicons (16S, 18S, ...) against SILVA/GTDB-style databases, in one run.
   SILVA, GTDB, SINTAX and key=value headers are parsed.

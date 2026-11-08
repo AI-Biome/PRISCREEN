@@ -14,6 +14,8 @@ rule filter_reads:
     log:
         "logs/filter/{sample}.log"
     threads: 4
+    container:
+        CONTAINERS["chopper"]
     params:
         min_len=int(cfg("filter", "min_length", default=200)),
         max_len=lambda wc: f"--maxlength {int(cfg('filter', 'max_length', default=0))}"
@@ -24,9 +26,8 @@ rule filter_reads:
     shell:
         r"""
         set -euo pipefail
-        pigz -dcf -p 2 {input.fq} \
-          | chopper -q {params.min_q} -l {params.min_len} {params.max_len} --threads {threads} 2> {log} \
-          | pigz -p 2 > {output.fq}
+        chopper -i {input.fq} -q {params.min_q} -l {params.min_len} {params.max_len} --threads {threads} 2> {log} \
+          | gzip > {output.fq}
         """
 
 
@@ -45,6 +46,8 @@ rule map_to_reference:
         sort_threads=min(4, THREADS_MAP)
     resources:
         mem_mb=mem_mb(THREADS_MAP, 4000), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["minimap2_samtools"]
     shell:
         r"""
         set -euo pipefail
@@ -68,17 +71,19 @@ rule bin_reads:
     threads: 2
     resources:
         mem_mb=mem_mb(2), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["samtools"]
     shell:
         r"""
         set -euo pipefail
         awk -F'\t' -v A='{wildcards.amplicon}' 'BEGIN{{OFS="\t"}} index($1, A"|")==1 {{print $1, 0, $2}}' {input.fai} > {output.bed}
         if [ ! -s {output.bed} ]; then
             echo "no reference sequence of amplicon {wildcards.amplicon} in {input.fai}; empty bin" > {log}
-            : | pigz > {output.fq}
+            : | gzip > {output.fq}
             exit 0
         fi
         # -F 0x904: no unmapped, secondary or supplementary records; samtools fastq restores read orientation.
         samtools view -u -F 0x904 -M -L {output.bed} {input.bam} 2> {log} \
           | samtools fastq -0 /dev/stdout -s /dev/null - 2>> {log} \
-          | pigz -p {threads} > {output.fq}
+          | gzip > {output.fq}
         """

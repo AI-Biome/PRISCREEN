@@ -28,6 +28,8 @@ rule mmseqs_search:
         max_seqs=int(cfg("identify", "max_seqs", default=300))
     resources:
         mem_mb=mem_mb(THREADS_MMSEQS, 4000), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["mmseqs2"]
     shell:
         r"""
         set -euo pipefail
@@ -59,6 +61,8 @@ rule summarize_hits:
         top_delta=float(cfg("identify", "top_delta", default=0.01))
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["python"]
     script:
         "../scripts/summarize_hits.py"
 
@@ -74,6 +78,8 @@ rule species_summary:
         columns=SUMMARY_COLUMNS
     resources:
         mem_mb=mem_mb(1), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["python"]
     script:
         "../scripts/sample_summary.py"
 
@@ -92,5 +98,7 @@ rule read_votes:
         panel_amplicons=PANEL_AMPLICONS
     resources:
         mem_mb=mem_mb(1, 2000), runtime=RUNTIME_MIN
+    container:
+        CONTAINERS["medaka"]
     script:
         "../scripts/read_votes.py"
