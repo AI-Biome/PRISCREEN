@@ -1,56 +1,65 @@
+#!/usr/bin/env python3
+"""Subsample a fixed number of reads from a FASTQ(.gz) file in one streaming pass.
+
+Reservoir sampling keeps only ``num_reads`` records in memory, so files of any
+size can be subsampled. With ``--seed`` the result is reproducible.
+
+    python scripts/fastq_random_sample.py --input in.fastq.gz --output out.fastq.gz --num_reads 10000 --seed 42
+"""
 import argparse
-import random
 import gzip
+import random
 
 
 def open_maybe_gzip(path, mode):
-    """Open plain or gzipped FASTQ depending on extension."""
     return gzip.open(path, mode) if path.endswith(".gz") else open(path, mode)
 
 
+def fastq_records(fh):
+    while True:
+        header = fh.readline()
+        if not header:
+            return
+        seq, plus, qual = fh.readline(), fh.readline(), fh.readline()
+        if not header.startswith("@") or not plus.startswith("+"):
+            raise ValueError(f"malformed FASTQ record near: {header.strip()!r}")
+        yield header, seq, plus, qual
+
+
+def reservoir_sample(records, k, rng):
+    """k records chosen uniformly at random from an iterator (Algorithm R)."""
+    sample = []
+    for n, rec in enumerate(records):
+        if n < k:
+            sample.append(rec)
+        else:
+            j = rng.randrange(n + 1)
+            if j < k:
+                sample[j] = rec
+    return sample, n + 1 if sample else 0
+
+
 def subsample_fastq(input_fastq, output_fastq, num_reads, seed=None):
-    """Subsample a given number of reads from a FASTQ or FASTQ.GZ file."""
-
-    if seed is not None:
-        random.seed(seed)
-
-    reads = []
-    with open_maybe_gzip(input_fastq, "rt") as f:
-        while True:
-            r1 = f.readline()
-            if not r1:
-                break  # EOF
-            r2 = f.readline()
-            r3 = f.readline()
-            r4 = f.readline()
-            reads.append([r1, r2, r3, r4])
-
-    if num_reads > len(reads):
-        raise ValueError(f"Requested {num_reads} reads but input contains only {len(reads)} reads.")
-
-    sampled_reads = random.sample(reads, num_reads)
-
-
-    with open_maybe_gzip(output_fastq, "wt") as f:
-        for read in sampled_reads:
-            f.writelines(read)
+    rng = random.Random(seed)
+    with open_maybe_gzip(input_fastq, "rt") as fin:
+        sample, total = reservoir_sample(fastq_records(fin), num_reads, rng)
+    if total < num_reads:
+        raise ValueError(f"requested {num_reads} reads but the input has only {total}")
+    with open_maybe_gzip(output_fastq, "wt") as fout:
+        for rec in sample:
+            fout.writelines(rec)
+    return total
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Subsample reads from a FASTQ or FASTQ.GZ file.")
-    parser.add_argument("--input", required=True, help="Input FASTQ(.gz) file")
-    parser.add_argument("--output", required=True, help="Output FASTQ(.gz) file")
-    parser.add_argument("--num_reads", type=int, required=True, help="Number of reads to sample")
-    parser.add_argument("--seed", type=int, default=None, help="Optional random seed")
-
-    args = parser.parse_args()
-
-    subsample_fastq(
-        input_fastq=args.input,
-        output_fastq=args.output,
-        num_reads=args.num_reads,
-        seed=args.seed
-    )
+    ap = argparse.ArgumentParser(description="Subsample reads from a FASTQ or FASTQ.GZ file (streaming).")
+    ap.add_argument("--input", required=True, help="input FASTQ(.gz)")
+    ap.add_argument("--output", required=True, help="output FASTQ(.gz)")
+    ap.add_argument("--num_reads", type=int, required=True, help="number of reads to keep")
+    ap.add_argument("--seed", type=int, default=None, help="random seed")
+    args = ap.parse_args()
+    total = subsample_fastq(args.input, args.output, args.num_reads, args.seed)
+    print(f"kept {args.num_reads} of {total} reads")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,0 @@
-name: mmseqs
-channels: [bioconda, conda-forge, defaults]
-dependencies:
-  - mmseqs2>=15.6
-  - python>=3.10
-  - pandas

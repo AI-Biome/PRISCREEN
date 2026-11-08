@@ -1,93 +1,84 @@
-rule build_mapping_panel:
+"""Optional read filtering, mapping to the reference and binning of reads per amplicon."""
+
+
+def sample_reads(wc):
+    return f"results/filtered/{wc.sample}.fq.gz" if FILTER else FASTQ[wc.sample]
+
+
+rule filter_reads:
+    """Length and mean-quality filter (chopper)."""
     input:
-        list(PANEL_FASTA.values())
+        fq=lambda wc: FASTQ[wc.sample]
     output:
-        fa="results/map/panel_all.fasta"
-    threads: 1
+        fq=temp("results/filtered/{sample}.fq.gz")
+    log:
+        "logs/filter/{sample}.log"
+    threads: 4
+    params:
+        min_len=int(cfg("filter", "min_length", default=200)),
+        max_len=lambda wc: f"--maxlength {int(cfg('filter', 'max_length', default=0))}"
+                           if int(cfg("filter", "max_length", default=0)) > 0 else "",
+        min_q=float(cfg("filter", "min_quality", default=9)),
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+        mem_mb=mem_mb(2), runtime=RUNTIME_MIN
     shell:
         r"""
         set -euo pipefail
-        mkdir -p results/map
-        cat {input} > {output.fa}
+        pigz -dcf -p 2 {input.fq} \
+          | chopper -q {params.min_q} -l {params.min_len} {params.max_len} --threads {threads} 2> {log} \
+          | pigz -p 2 > {output.fq}
         """
 
-rule map_to_panel:
+
+rule map_to_reference:
+    """Map all reads of a sample to the panel and rRNA bin references; keep secondary hits for read votes."""
     input:
-        fq=lambda wc: FASTQ[wc.sample],
-        ref="results/map/panel_all.fasta"
+        fq=sample_reads,
+        ref="results/panel/mapping_reference.fasta"
     output:
-        bam=temp("results/map/{sample}.panel.sorted.bam"),
-        bai=temp("results/map/{sample}.panel.sorted.bam.bai")
-    conda:
-        "../envs/minimap2.yaml"
+        bam=temp("results/map/{sample}.bam"),
+        bai=temp("results/map/{sample}.bam.bai")
+    log:
+        "logs/map/{sample}.log"
     threads: THREADS_MAP
+    params:
+        sort_threads=min(4, THREADS_MAP)
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * THREADS_MAP // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+        mem_mb=mem_mb(THREADS_MAP, 4000), runtime=RUNTIME_MIN
     shell:
         r"""
         set -euo pipefail
-        mkdir -p results/map
-        minimap2 -t {threads} -ax map-ont -N 10 --secondary=yes {input.ref} {input.fq} \
-          | samtools view -b - \
-          | samtools sort -o {output.bam}
+        minimap2 -t {threads} -ax map-ont -N 10 --secondary=yes {input.ref} {input.fq} 2> {log} \
+          | samtools sort -@ {params.sort_threads} -m 1G -o {output.bam} - 2>> {log}
         samtools index {output.bam}
         """
 
-rule amplicon_readnames:
+
+rule bin_reads:
+    """Reads whose primary alignment is to a reference of this amplicon, as FASTQ (one BAM region query, no re-reading)."""
     input:
-        bam="results/map/{sample}.panel.sorted.bam"
+        bam="results/map/{sample}.bam",
+        bai="results/map/{sample}.bam.bai",
+        fai="results/panel/mapping_reference.fasta.fai"
     output:
-        lists=directory("results/bin/{sample}/readlists"),
-        names=expand("results/bin/{{sample}}/readlists/{amp}.names", amp=AMP_LIST)
-    params:
-        amps=" ".join(AMP_LIST)
-    conda:
-        "../envs/samtools.yaml"
+        fq="results/bin/{sample}/{amplicon}.fq.gz",
+        bed=temp("results/bin/{sample}/{amplicon}.regions.bed")
+    log:
+        "logs/bin/{sample}/{amplicon}.log"
+    threads: 2
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+        mem_mb=mem_mb(2), runtime=RUNTIME_MIN
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {output.lists}
-
-        samtools view {input.bam} \
-          | awk -F'\t' 'BEGIN{{OFS="\t"}} $3!="*"{{split($3,a,"|"); print $1,a[1]}}' \
-          | sort -u > {output.lists}/qname_amp.tsv
-
-        cut -f2 {output.lists}/qname_amp.tsv | sort -u > {output.lists}/amps.txt
-
-        for AMP in {params.amps}; do
-          touch {output.lists}/"$AMP".names
-        done
-
-        while read AMP; do
-          awk -v A="$AMP" '$2==A{{print $1}}' {output.lists}/qname_amp.tsv > {output.lists}/"$AMP".names
-        done < {output.lists}/amps.txt
-        """
-
-rule amplicon_fastq:
-    input:
-        fq=lambda wc: FASTQ[wc.sample],
-        names="results/bin/{sample}/readlists/{amplicon}.names"
-    output:
-        fq="results/bin/{sample}/fastq/{amplicon}.fq.gz"
-    conda:
-        "../envs/seqtk.yaml"
-    resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p results/bin/{wildcards.sample}/fastq
-        if [ -s {input.names} ]; then
-          seqtk subseq {input.fq} {input.names} | gzip -c > {output.fq}
-        else
-          printf "" | gzip -c > {output.fq}
+        awk -F'\t' -v A='{wildcards.amplicon}' 'BEGIN{{OFS="\t"}} index($1, A"|")==1 {{print $1, 0, $2}}' {input.fai} > {output.bed}
+        if [ ! -s {output.bed} ]; then
+            echo "no reference sequence of amplicon {wildcards.amplicon} in {input.fai}; empty bin" > {log}
+            : | pigz > {output.fq}
+            exit 0
         fi
+        # -F 0x904: no unmapped, secondary or supplementary records; samtools fastq restores read orientation.
+        samtools view -u -F 0x904 -M -L {output.bed} {input.bam} 2> {log} \
+          | samtools fastq -0 /dev/stdout -s /dev/null - 2>> {log} \
+          | pigz -p {threads} > {output.fq}
         """

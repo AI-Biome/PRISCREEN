@@ -1,29 +1,20 @@
-# Temporary directories created by MMseqs2
-tmp_mmseqs_*/
-tmp_*/
+# pixi environment (pixi.lock is tracked)
+.pixi/
+.pixi_install.log
 
-# Snakemake working directory
+# Snakemake
 .snakemake/
+results/
+logs/
 
-# Pipeline results (optional - uncomment if you don't want to track results)
-# results/
-
-# Software binaries and builds
-software/
-racon/
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
-*.pyo
+.pytest_cache/
 
-# IDE/Editor files
+# Editors / OS
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
-
-# OS files
 .DS_Store
-Thumbs.db

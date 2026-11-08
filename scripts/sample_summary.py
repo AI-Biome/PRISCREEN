@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-import pandas as pd
-import glob
+"""Concatenate the per-amplicon tables of one sample into one TSV (first column: amplicon)."""
+
 import os
 
-# Get parameters from Snakemake
-summaries = snakemake.input.summaries
-output_tsv = snakemake.output.tsv
+import pandas as pd
 
-rows = []
-for p in summaries:
-    amp = p.split("/")[-2]
-    if os.path.exists(p) and os.path.getsize(p) > 0:
-        df = pd.read_csv(p, sep="\t")
-        df.insert(0, "amplicon", amp)
-        rows.append(df)
 
-if rows:
-    all_df = pd.concat(rows, ignore_index=True)
-else:
-    all_df = pd.DataFrame(columns=["amplicon","consensus","best_species","pident","qcov","status"])
+def concat_tables(paths, columns):
+    frames = []
+    for p in paths:
+        amp = os.path.basename(os.path.dirname(p))
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            df = pd.read_csv(p, sep="\t")
+            if not df.empty:
+                df.insert(0, "amplicon", amp)
+                frames.append(df)
+    if frames:
+        return pd.concat(frames, ignore_index=True)
+    return pd.DataFrame(columns=["amplicon"] + list(columns))
 
-all_df.to_csv(output_tsv, sep="\t", index=False)
+
+def main(smk) -> None:
+    columns = list(smk.params.columns)
+    concat_tables(list(smk.input), columns).to_csv(smk.output.tsv, sep="\t", index=False)
+
+
+if __name__ == "__main__":
+    main(snakemake)  # noqa: F821 - injected by Snakemake

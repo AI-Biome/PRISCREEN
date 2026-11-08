@@ -1,0 +1,52 @@
+// PRISCREEN workflow (Graphviz). Render:  dot -Tpng docs/priscreen_pipeline.dot -o docs/priscreen_pipeline_dot.png
+// Keep in step with the rules in rules/*.smk and docs/make_pipeline_figure.py.
+digraph PRISCREEN {
+    graph [rankdir=TB, splines=spline, nodesep=0.25, ranksep=0.35, fontname="Helvetica", bgcolor="white", pad=0.2]
+    node  [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", penwidth=1.4, margin="0.18,0.08"]
+    edge  [fontname="Helvetica", fontsize=9, color="#3a3a3a", arrowsize=0.8]
+
+    // inputs
+    reads  [label="ONT reads\n(FASTQ per sample)", shape=parallelogram, fillcolor="#e9eef7", color="#33518a"]
+    panel  [label="PRISTINE panel\namplicon|species=...", shape=parallelogram, fillcolor="#e9eef7", color="#33518a"]
+    rrna   [label="rRNA database\n(SILVA / GTDB SSU)", shape=parallelogram, fillcolor="#e9eef7", color="#33518a"]
+    { rank=same; reads; panel; rrna }
+
+    // steps (rule names in brackets)
+    map    [label="Map reads to binning reference\n[map_to_reference]  per sample", fillcolor="#eaf1f8", color="#2c6aa0"]
+    bin    [label="Bin reads by amplicon (primary alignment)\n[bin_reads]  per sample and amplicon", fillcolor="#eaf1f8", color="#2c6aa0"]
+    clust  [label="Cluster reads, drop small clusters\n[cluster_reads]  per sample and amplicon", fillcolor="#ebf5ee", color="#2e7d4f"]
+    polish [label="Polish centroids: Racon rounds + Medaka\n[consensus_polish]  per sample", fillcolor="#ebf5ee", color="#2e7d4f"]
+    hap    [label="Split mixed clusters into haplotypes (SNPs, indels)\n[haplotype_split]  per sample", fillcolor="#ebf5ee", color="#2e7d4f"]
+    db     [label="MMseqs2 databases\n[mmseqs_createdb]  panel + one per rRNA amplicon", fillcolor="#fbf1e4", color="#b86e12"]
+    search [label="Search consensus sequences\n[mmseqs_search]  per sample and database", fillcolor="#fbf1e4", color="#b86e12"]
+    assign [label="Assign taxa (identity, coverage, bit-score band, LCA)\n[summarize_hits]  per amplicon", fillcolor="#fbf1e4", color="#b86e12"]
+    votes  [label="Per-read species votes (panel)\n[read_votes]  per sample", fillcolor="#fbf1e4", color="#b86e12"]
+    flag   [label="Flag rare, low-resolution, novel\n[flag_rare_novel]  per amplicon", fillcolor="#f6e7e7", color="#a03a3a"]
+
+    // outputs
+    o_species [label="species_summary.tsv", shape=parallelogram, fillcolor="#e8f4ec", color="#2e7d4f"]
+    o_novel   [label="novelty_summary.tsv\nflagged_sequences.fasta", shape=parallelogram, fillcolor="#e8f4ec", color="#2e7d4f"]
+    o_votes   [label="read_votes.tsv", shape=parallelogram, fillcolor="#e8f4ec", color="#2e7d4f"]
+    { rank=same; o_species; o_novel; o_votes }
+
+    reads -> map
+    panel -> map  [label=" binning reference"]
+    rrna  -> map  [label=" bin_reference"]
+    panel -> db
+    rrna  -> db
+    map   -> bin    [label=" BAM"]
+    map   -> votes  [label=" primary + secondary AS"]
+    bin   -> clust  [label=" FASTQ per amplicon"]
+    clust -> polish [label=" centroids (size >= min_size)"]
+    bin   -> polish [label=" reads"]
+    polish -> hap    [label=" consensus FASTA"]
+    bin    -> hap    [label=" reads"]
+    hap    -> search [label=" consensus per haplotype"]
+    db    -> search
+    search -> assign [label=" hits with lineages"]
+    hap    -> flag  [label=" cluster_sizes.tsv"]
+    assign -> flag
+    assign -> o_species
+    flag   -> o_novel
+    votes  -> o_votes
+}

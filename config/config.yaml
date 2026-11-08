@@ -1,34 +1,91 @@
-taxonomy:
-  mode: "hybrid"   # panel | hybrid | none
+# PRISCREEN configuration. Relative paths are resolved from the PRISCREEN directory.
 
-generic_db:
-  fasta: "data/generic/gtdb.fasta"
-  name: "genericDB"
+samples: config/samples.tsv            # columns: sample, fastq
 
-multi_species:
-  panel_fasta: "data/reference_amplicons.fasta"
+# --- Custom amplicons designed with PRISTINE -------------------------------
+panel:
+  fasta: data/reference_amplicons.fasta   # headers ">amplicon|species=Genus_species[|genome=...]"
+  pristine_output: null                   # or: PRISTINE output directory (or a list); the panel is then
+                                          # built from <group>/primers/amplicons/*_amplicons.fasta and
+                                          # panel.fasta is ignored
 
-nanofilt:
+# --- rRNA amplicons (16S, 18S, ITS ...) identified against a taxonomy-labelled database ----
+# database: FASTA with the lineage in the header (SILVA, GTDB SSU, "id|tax=...", "id;tax=d:...,p:...").
+# bin_reference: FASTA used to recognise reads of this amplicon (default: the database itself).
+#   When several rRNA amplicons are configured, each needs its own bin_reference.
+rrna:
+  16S:
+    database: data/toy_16S_db.fasta
+    bin_reference: null
+  # 18S:
+  #   database: data/SILVA_138.2_SSURef_NR99_tax_silva_euk.fasta
+
+# --- Read filter (chopper) --------------------------------------------------
+filter:
   enable: false
-  min_len: 200
-  max_len: 0
-  min_q: 9
+  min_length: 200
+  max_length: 0          # 0 = no upper limit
+  min_quality: 9
 
+# --- Clustering of binned reads (vsearch) -----------------------------------
 cluster:
-  enable: true
-  id_threshold: 0.995
+  id_threshold: 0.93     # a read joins a cluster when it is this similar to the centroid read (gap columns count
+                         # as differences). Reads of one variant are about twice the read error apart, so 0.93
+                         # suits reads with up to ~3 % error (HAC), 0.96 Q20+/SUP reads. Close variants that
+                         # share a cluster are separated afterwards by the haplotype step.
+  min_size: 3            # clusters with fewer reads are not polished
 
+# --- Consensus polishing -----------------------------------------------------
 consensus:
   racon_rounds: 2
-  medaka_model: "r1041_e82_400bps_hac_v4.2.0"
+  medaka: true
+  medaka_model: null     # null = medaka chooses from the read headers (basecaller model); e.g. r1041_e82_400bps_sup_v5.2.0
+  medaka_bacteria: false # true = medaka --bacteria (bacterial methylation-aware model) when medaka_model is null
+  keep_intermediate: false  # keep reads/SAM/medaka BAM in results/consensus/<sample>/polish/
 
+# --- Haplotype splitting of mixed clusters ----------------------------------
+# Species variants of a PRISTINE amplicon are often closer than the read error and end up in one
+# cluster. Reads are mapped back to the consensus, minority substitutions are called and the reads
+# are phased; each haplotype becomes its own consensus (<consensus>_h1, _h2, ...).
+haplotypes:
+  enable: true
+  min_reads: 5           # reads a minority allele and a haplotype need
+  min_allele_frac: 0.15  # minimum frequency of the minority allele at a position (and of a haplotype)
+  min_depth: 20          # positions with fewer reads are not considered
+  min_base_quality: 10   # bases below this quality do not count
+  min_linkage: 0.8       # fraction of reads whose allele must agree with the haplotype grouping
+  min_variants: 1        # linked sites a split needs (2-3 is more conservative)
+  max_haplotypes: 4      # per consensus
+  indels: true           # use deletions and insertions as sites too (false: substitutions only)
+  hp_min_run: 4          # a 1-nt indel in a homopolymer of this length or more is a weak site: it needs
+  hp_min_allele_frac: 0.2  # this allele frequency instead of min_allele_frac and cannot start a split alone
+  keep_bam: false        # keep results/haplotypes/<sample>/work/reads_to_consensus.bam
+
+# --- Taxonomic assignment (MMseqs2) ------------------------------------------
 identify:
   enable: true
-  min_pident: 0.985
-  min_qcov: 0.90
-  top_delta: 0.01
+  min_pident: 98.5       # percent identity a hit needs
+  min_qcov: 0.90         # fraction of the consensus covered by the hit
+  top_delta: 0.01        # hits within this fraction of the best bit score are tied; the assignment is their lowest common rank
+  max_seqs: 300
+  index_rrna_db: false   # prebuild an MMseqs2 index of rRNA databases: faster with many samples, but the
+                         # nucleotide index takes ~9 GB of disk and RAM regardless of database size
+  vote_min_margin: 4     # read_votes: alignment-score margin for a read to count as clearly supporting one species
+
+# --- Flags for rare / low-resolution / novel sequences ----------------------
+novelty:
+  min_reads: 5
+  min_rel_abundance: 0.0
+  novel_pident: 97.0     # percent
+  novel_qcov: 0.90
+  min_resolved_rank: genus
 
 threads:
   map: 8
   polish: 8
   mmseqs: 8
+
+# SLURM requests (snakemake --profile profiles/slurm); ignored for local runs
+resources:
+  mem_mb_per_cpu: 2600
+  runtime_min: 120

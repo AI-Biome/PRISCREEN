@@ -1,28 +1,12 @@
-# Snakemake SLURM Profile Configuration
-# This profile is used when running the pipeline with --profile profiles/slurm
-
-# Use SLURM executor
+# Snakemake profile for SLURM clusters:  snakemake --profile profiles/slurm
+# Run it from the pixi environment (pixi shell, or pixi run snakemake ...); the
+# jobs inherit PATH, so every tool comes from ./.pixi. Memory and runtime of the
+# rules are derived from config/config.yaml (resources: mem_mb_per_cpu, runtime_min).
 executor: slurm
-
-# Maximum number of jobs to submit simultaneously
-jobs: 20
-
-# Default resources (can be overridden by individual rules)
-default-resources:
-  - slurm_account=none
-  - slurm_partition=batch
-
-# Print shell commands for debugging
+jobs: 50
 printshellcmds: true
-
-# Keep going if a job fails (useful for debugging)
-keep-going: false
-
-# Rerun incomplete jobs
 rerun-incomplete: true
-
-# Use conda environments
-use-conda: true
-
-# Conda frontend (mamba is faster than conda)
-conda-frontend: mamba
+keep-going: true
+default-resources:
+  - slurm_partition=batch     # your partition
+  # - slurm_account=myaccount

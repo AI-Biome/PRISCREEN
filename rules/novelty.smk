@@ -1,35 +1,38 @@
+"""Flags for rare, poorly resolved and potentially novel sequences."""
+
+
 rule flag_rare_novel:
     input:
         summary="results/identify/{sample}/{amplicon}/summary.tsv",
-        cons="results/consensus/{sample}/{amplicon}/consensus.fasta",
-        uc=lambda wc: f"results/cluster/{wc.sample}/{wc.amplicon}/clusters.uc" if CLUSTER else ""
+        cons=CONS_DIR + "/{sample}/{amplicon}/consensus.fasta",
+        sizes=CONS_DIR + "/{sample}/{amplicon}/cluster_sizes.tsv"
     output:
         tsv="results/identify/{sample}/{amplicon}/novelty_flags.tsv",
         fasta="results/identify/{sample}/{amplicon}/flagged_sequences.fasta"
-    conda:
-        "../envs/mmseqs.yaml"
-    resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+    log:
+        "logs/flag_rare_novel/{sample}/{amplicon}.log"
     params:
-        min_reads=int(config.get("novelty", {}).get("min_reads", 5)),
-        min_rel=float(config.get("novelty", {}).get("min_rel_abundance", 0.0)),
-        novel_pid=float(config.get("novelty", {}).get("novel_pident", 97.0)),
-        novel_qcov=float(config.get("novelty", {}).get("novel_qcov", 0.90)),
-        treat_unclassified_as_novel=bool(config.get("novelty", {}).get("treat_unclassified_as_novel", True)),
-        min_resolved_rank=str(config.get("novelty", {}).get("min_resolved_rank", "genus"))
+        min_reads=int(cfg("novelty", "min_reads", default=5)),
+        min_rel=float(cfg("novelty", "min_rel_abundance", default=0.0)),
+        novel_pid=float(cfg("novelty", "novel_pident", default=97.0)),
+        novel_qcov=float(cfg("novelty", "novel_qcov", default=0.9)),
+        min_resolved_rank=str(cfg("novelty", "min_resolved_rank", default="genus"))
+    resources:
+        mem_mb=mem_mb(1), runtime=RUNTIME_MIN
     script:
         "../scripts/flag_rare_novel.py"
 
-rule sample_novelty_summary:
+
+rule novelty_summary:
     input:
-        flags=expand("results/identify/{{sample}}/{amplicon}/novelty_flags.tsv", amplicon=AMP_LIST)
+        expand("results/identify/{{sample}}/{amplicon}/novelty_flags.tsv", amplicon=AMP_LIST)
     output:
         tsv="results/identify/{sample}/novelty_summary.tsv"
-    conda:
-        "../envs/mmseqs.yaml"
+    log:
+        "logs/novelty_summary/{sample}.log"
+    params:
+        columns=NOVELTY_COLUMNS
     resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
+        mem_mb=mem_mb(1), runtime=RUNTIME_MIN
     script:
-        "../scripts/sample_novelty_summary.py"
+        "../scripts/sample_summary.py"

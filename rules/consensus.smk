@@ -1,72 +1,27 @@
-"""
-Rules for consensus sequence generation
-"""
+"""Consensus polishing of cluster centroids, one job per sample (all amplicons together)."""
 
-rule build_racon:
-    output:
-        generic = "software/racon_build/generic/bin/racon",
-        avx2    = "software/racon_build/avx2/bin/racon"
-    conda:
-        "../envs/racon-build.yaml"
-    threads: 4
-    resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * 4 // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
-    shell:
-        r"""
-        set -euo pipefail
-        rm -rf software/racon_src software/racon_build
-        git clone --recursive https://github.com/lbcb-sci/racon.git software/racon_src
-
-        # Generic (portable)
-        mkdir -p software/racon_build/generic
-        cd software/racon_build/generic
-        cmake -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_CXX_FLAGS="-O3 -march=x86-64 -mtune=generic" \
-              -DCMAKE_C_FLAGS="-O3 -march=x86-64 -mtune=generic" \
-              ../../racon_src
-        make -j {threads}
-        install -D bin/racon ../../../racon/bin/racon_generic
-
-        # AVX2 (fast)
-        cd ..
-        mkdir -p avx2
-        cd avx2
-        cmake -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_CXX_FLAGS="-O3 -mavx2 -mtune=native" \
-              -DCMAKE_C_FLAGS="-O3 -mavx2 -mtune=native" \
-              ../../racon_src
-        make -j {threads}
-        install -D bin/racon ../../../racon/bin/racon_avx2
-        """
-
-def select_racon_output():
-    outs = rules.build_racon.output
-    if has_flag("avx2"):
-        return outs.avx2
-
-    return outs.generic
 
 rule consensus_polish:
+    """Racon rounds then Medaka on the centroids of all amplicons of a sample; one consensus FASTA
+    and a cluster_sizes.tsv (cluster size and reads mapped to each consensus) per amplicon."""
     input:
-        racon=select_racon_output(),
-        fq="results/bin/{sample}/fastq/{amplicon}.fq.gz",
-        cents=lambda wc: (
-            f"results/cluster/{wc.sample}/{wc.amplicon}/centroids.fasta"
-            if CLUSTER else
-            []
-        )
+        fqs=expand("results/bin/{{sample}}/{amplicon}.fq.gz", amplicon=AMP_LIST),
+        cents=expand("results/cluster/{{sample}}/{amplicon}/centroids.fasta", amplicon=AMP_LIST)
     output:
-        cons="results/consensus/{sample}/{amplicon}/consensus.fasta"
-    conda:
-        "../envs/consensus.yaml"
+        cons=expand("results/consensus/{{sample}}/{amplicon}/consensus.fasta", amplicon=AMP_LIST),
+        sizes=expand("results/consensus/{{sample}}/{amplicon}/cluster_sizes.tsv", amplicon=AMP_LIST)
+    log:
+        "logs/consensus/{sample}.log"
     threads: THREADS_POLISH
-    resources:
-        mem_mb=int(slurm_config['SLURM_ARGS']['mem_of_node']) * THREADS_POLISH // int(slurm_config['SLURM_ARGS']['cpus_per_task']),
-        runtime=int(slurm_config['SLURM_ARGS']['max_runtime'])
     params:
-        rounds=int(config["consensus"]["racon_rounds"]),
-        model=lambda wc: AMPLICONS[wc.amplicon].get("medaka_model", config["consensus"]["medaka_model"]),
-        clustered=CLUSTER
+        amplicons=AMP_LIST,
+        workdir="results/consensus/{sample}/polish",
+        rounds=int(cfg("consensus", "racon_rounds", default=2)),
+        medaka=bool(cfg("consensus", "medaka", default=True)),
+        model=cfg("consensus", "medaka_model") or "",
+        bacteria=bool(cfg("consensus", "medaka_bacteria", default=False)),
+        keep_intermediate=bool(cfg("consensus", "keep_intermediate", default=False))
+    resources:
+        mem_mb=mem_mb(THREADS_POLISH, 8000), runtime=RUNTIME_MIN
     script:
         "../scripts/consensus_polish.py"
